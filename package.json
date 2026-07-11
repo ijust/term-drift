@@ -1,0 +1,35 @@
+{
+  "name": "term-drift",
+  "version": "0.1.0",
+  "description": "term-drift detects terminology introduced or distorted during AI-assisted development and helps keep project documents aligned with the project's ubiquitous language.",
+  "type": "module",
+  "bin": {
+    "term-drift": "bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "rules",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ijust/term-drift.git"
+  },
+  "keywords": [
+    "terminology",
+    "ubiquitous-language",
+    "glossary",
+    "ai-assisted-development",
+    "documentation"
+  ],
+  "author": "Yoshishige Tsuji",
+  "license": "MIT"
+}
