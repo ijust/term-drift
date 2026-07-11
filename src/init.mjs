@@ -4,7 +4,11 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveLedgerPath } from "./ledger.mjs";
+
+// 配布物に同梱された検出 rules（正本）の在り処。
+const PACKAGED_RULES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "rules");
 
 const LEDGER_TEMPLATE = `# Glossary（用語の台帳）
 
@@ -61,6 +65,24 @@ export function initTermDrift(dir) {
     notes.push(`台帳の雛形を ${ledger} に置きました。正規語を1語ずつ登録して育ててください。`);
   }
 
-  notes.push("次にやること: エージェントとの会話で「term-drift で用語を点検して」と伝えてください（進め方は term-drift の rules/workflow.md にあります）。");
+  // 検出 rules を対象リポへ配置する（非破壊）。
+  //
+  // 「対象リポに配置された実体」として置くことが要点: 他のツール（intent-planner の造語検査など）は
+  // この場所を読んで検出を実行し、node_modules・npx キャッシュのコピーは見ない（そこには過去に
+  // publish された古い版が落ちてくるため）。ここに置いてあるものが、そのリポでの正本になる。
+  const rulesDir = path.join(markerDir, "rules");
+  fs.mkdirSync(rulesDir, { recursive: true });
+  for (const name of ["detect.md", "workflow.md"]) {
+    const dest = path.join(rulesDir, name);
+    const rel = path.relative(dir, dest);
+    if (fs.existsSync(dest)) {
+      skipped.push(rel);
+      continue;
+    }
+    fs.copyFileSync(path.join(PACKAGED_RULES_DIR, name), dest);
+    created.push(rel);
+  }
+
+  notes.push("次にやること: エージェントとの会話で「term-drift で用語を点検して」と伝えてください（進め方は .term-drift/rules/workflow.md にあります）。");
   return { created, skipped, ledger, notes };
 }

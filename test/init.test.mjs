@@ -47,6 +47,32 @@ test(".intent/glossary.md があれば正本として使い、二重台帳を作
   assert.ok(r.notes.some((n) => n.includes("既存")), "既存台帳を使う旨が案内される");
 });
 
+test("検出 rules を対象リポへ配置する（他ツールが読む場所・キャッシュを見せないため）", () => {
+  const dir = tmp();
+  const r = initTermDrift(dir);
+  const detect = path.join(dir, ".term-drift", "rules", "detect.md");
+  const workflow = path.join(dir, ".term-drift", "rules", "workflow.md");
+  assert.ok(fs.existsSync(detect), "検出 rules が対象リポに置かれる（intent-planner の造語検査の解決先）");
+  assert.ok(fs.existsSync(workflow), "一巡の進め方も置かれる");
+  assert.ok(r.created.includes(path.join(".term-drift", "rules", "detect.md")));
+  // 配布物の正本と同一内容（コピーであって別物にしない）。
+  const packaged = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "rules", "detect.md"), "utf8");
+  assert.equal(fs.readFileSync(detect, "utf8"), packaged, "配置された rules が正本と同一");
+  // 多層検出の実質が対象リポ側にも載っている（読み手が委ねられる中身）。
+  assert.ok(/層2: 比喩転用/.test(fs.readFileSync(detect, "utf8")), "普通の言葉の内輪転用を見る層が載る");
+});
+
+test("非破壊: 既存の .term-drift/rules/detect.md を上書きしない（利用者の調整を消さない）", () => {
+  const dir = tmp();
+  const rulesDir = path.join(dir, ".term-drift", "rules");
+  fs.mkdirSync(rulesDir, { recursive: true });
+  const detect = path.join(rulesDir, "detect.md");
+  fs.writeFileSync(detect, "# 利用者が調整した検出 rules\n");
+  const r = initTermDrift(dir);
+  assert.equal(fs.readFileSync(detect, "utf8"), "# 利用者が調整した検出 rules\n", "既存 rules が無傷");
+  assert.ok(r.skipped.includes(path.join(".term-drift", "rules", "detect.md")), "スキップとして報告される");
+});
+
 test("非破壊: 既存の .term-drift/glossary.md を上書きしない", () => {
   const dir = tmp();
   fs.mkdirSync(path.join(dir, ".term-drift"), { recursive: true });
