@@ -9,12 +9,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { scan } from "../src/scan.mjs";
 import { loadLedger } from "../src/ledger.mjs";
+import { initTermDrift } from "../src/init.mjs";
 import { loadDictionary, applyDictionary } from "../src/apply.mjs";
 import { recheckDictionary } from "../src/recheck.mjs";
 
 const HELP = `term-drift — AI 支援開発で持ち込まれた用語のずれを、人承認の言い換えで揃え直す
 
 使い方:
+  term-drift init [dir]              対象リポへ目印（.term-drift/）と台帳の雛形を置く（非破壊）
   term-drift scan [dir]              走査対象の収集（部位優先・秘密除外・read-only）
   term-drift ledger [dir]            台帳の解決と内容の表示（.intent/glossary.md 優先）
   term-drift apply <辞書.json> [dir]   承認済み置換辞書の適用（git 管理下のみ・承認印必須）
@@ -37,6 +39,13 @@ function resolveDir(arg) {
 const [, , command, ...rest] = process.argv;
 
 switch (command) {
+  case "init": {
+    const dir = resolveDir(rest[0]);
+    const result = initTermDrift(dir);
+    console.log(JSON.stringify(result, null, 2));
+    for (const note of result.notes) console.error(note);
+    break;
+  }
   case "scan": {
     const dir = resolveDir(rest[0]);
     const result = scan(dir);
