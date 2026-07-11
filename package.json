@@ -17,7 +17,7 @@
     "node": ">=18.17"
   },
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "repository": {
     "type": "git",
