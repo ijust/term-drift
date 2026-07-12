@@ -49,6 +49,16 @@ export function isGitWorkTree(dir) {
   return r.status === 0 && r.stdout.trim() === "true";
 }
 
+/**
+ * git 追跡済みファイルの集合（リポ相対・スラッシュ区切り）。非 git 管理下なら null。read-only。
+ * 適用の可逆性（INV1）は「git から復元できること」なので、worktree 内かではなく追跡済みかで判定する。
+ */
+export function listTrackedFiles(dir) {
+  const r = spawnSync("git", ["ls-files", "-z"], { cwd: dir, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) return null;
+  return new Set(r.stdout.split("\0").filter((p) => p.length > 0));
+}
+
 /** コミットメッセージの収集（git が無い/非管理下なら空）。read-only。 */
 export function collectCommits(dir, limit = 200) {
   if (!isGitWorkTree(dir)) return [];
@@ -70,6 +80,11 @@ export function collectDocs(dir) {
       if (stat.isSymbolicLink()) continue;
       if (stat.isDirectory()) {
         if (EXCLUDED_DIRS.has(name) || name.startsWith(".")) continue;
+        if (isSecretName(name)) {
+          // 秘密名のディレクトリ（secrets/・credentials/ 等）は配下ごと収集しない（INV3）。
+          excludedSecrets.push(relChild);
+          continue;
+        }
         walk(relChild);
         continue;
       }

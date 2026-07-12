@@ -30,6 +30,21 @@ test("秘密ファイルは収集されず、除外として報告される（IN
   assert.ok(!JSON.stringify(result).includes("do-not-collect-me"), "秘密の中身が出力に混入しない");
 });
 
+test("秘密名のディレクトリは配下ごと収集されない（INV3）", () => {
+  const dir = tmpCopy();
+  fs.mkdirSync(path.join(dir, "secrets"));
+  fs.writeFileSync(path.join(dir, "secrets", "deployment.md"), "do-not-collect-me-in-secret-dir");
+  fs.mkdirSync(path.join(dir, "credentials"));
+  fs.writeFileSync(path.join(dir, "credentials", "notes.txt"), "do-not-collect-me-in-secret-dir");
+  const result = scan(dir);
+  const collected = result.docs.map((d) => d.path);
+  assert.ok(!collected.some((p) => p.startsWith("secrets")), "secrets/ 配下が収集されない");
+  assert.ok(!collected.some((p) => p.startsWith("credentials")), "credentials/ 配下が収集されない");
+  assert.ok(result.excludedSecrets.includes("secrets"), "secrets/ が除外として報告される");
+  assert.ok(result.excludedSecrets.includes("credentials"), "credentials/ が除外として報告される");
+  assert.ok(!JSON.stringify(result).includes("do-not-collect-me-in-secret-dir"), "秘密の中身が出力に混入しない");
+});
+
 test("部位優先: 計画文書 → ルート文書 → docs → その他 の順で並ぶ", () => {
   const { docs } = collectDocs(tmpCopy());
   const order = docs.map((d) => d.path);

@@ -81,6 +81,60 @@ test("冪等: 適用→再検査で残存ゼロ（有効免除のみ）・再適
   assert.deepEqual(result2.changes, [], "再適用で書き込みが発生しない");
 });
 
+test("git 追跡外のファイルには書き込まず、スキップとして報告される（INV1・git から復元できないため）", () => {
+  const dir = tmpCopy({ git: true });
+  const untracked = path.join(dir, "doc-untracked.md");
+  fs.writeFileSync(untracked, "結線の話。\n");
+  const result = applyDictionary(dict(), dir);
+  assert.ok(fs.readFileSync(untracked, "utf8").includes("結線"), "未追跡ファイルは無傷");
+  assert.ok(result.skippedUntracked.includes("doc-untracked.md"), "スキップが名指しで報告される");
+  const rc = recheckDictionary(dict(), dir);
+  assert.ok(!rc.remaining.some((r) => r.file === "doc-untracked.md"), "適用対象外は残存に数えない");
+  assert.ok(rc.skippedUntracked.includes("doc-untracked.md"), "recheck でも別枠で報告される");
+});
+
+test("交差辞書（言い換え先に別の承認語を含む）は連鎖するため適用前に拒否する", () => {
+  const dir = tmpCopy({ git: true });
+  const chained = {
+    replacements: [
+      { from: "甲", to: "乙", approved: true },
+      { from: "乙", to: "丙", approved: true },
+    ],
+  };
+  const before = fs.readFileSync(path.join(dir, "doc-a.md"), "utf8");
+  assert.throws(() => applyDictionary(chained, dir), /連鎖/);
+  assert.equal(fs.readFileSync(path.join(dir, "doc-a.md"), "utf8"), before, "拒否時は1バイトも書かれない");
+});
+
+test("同時置換: 同じ行の複数の承認語が1パスで置換され、置換結果へ連鎖しない", () => {
+  const dir = tmpCopy({ git: true });
+  fs.writeFileSync(path.join(dir, "doc-multi.md"), "結線と切断の話。\n");
+  execFileSync("git", ["add", "-A"], { cwd: dir });
+  const d = {
+    replacements: [
+      { from: "結線", to: "つなぎ込み", approved: true },
+      { from: "切断", to: "取り外し", approved: true },
+    ],
+  };
+  const result = applyDictionary(d, dir);
+  const t = fs.readFileSync(path.join(dir, "doc-multi.md"), "utf8");
+  assert.ok(t.includes("つなぎ込みと取り外し"), "両方の語が同時に置換される");
+  assert.ok(result.changes.some((c) => c.file === "doc-multi.md" && c.term === "結線" && c.count === 1));
+  assert.ok(result.changes.some((c) => c.file === "doc-multi.md" && c.term === "切断" && c.count === 1));
+});
+
+test("辞書の重複 from（同じ語の二重定義）は読み込み時に拒否する", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "term-drift-dict-"));
+  const dup = path.join(dir, "dup.json");
+  fs.writeFileSync(dup, JSON.stringify({
+    replacements: [
+      { from: "結線", to: "つなぎ込み", approved: true },
+      { from: "結線", to: "接続", approved: true },
+    ],
+  }));
+  assert.throws(() => loadDictionary(dup), /重複/);
+});
+
 test("辞書の形の検証: replacements 配列が無ければ・from が空なら拒否する", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "term-drift-dict-"));
   const bad1 = path.join(dir, "bad1.json");

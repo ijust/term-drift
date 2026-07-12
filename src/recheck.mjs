@@ -5,19 +5,26 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { collectDocs } from "./scan.mjs";
+import { collectDocs, listTrackedFiles } from "./scan.mjs";
 import { parseMarkers, isExempted, isMarkerLine } from "./markers.mjs";
 
 /**
- * @returns {{ remaining: {term, file, line}[], exempted: {file, term}[], invalidMarkers: {file, line, term}[] }}
+ * @returns {{ remaining: {term, file, line}[], exempted: {file, term}[], invalidMarkers: {file, line, term}[], skippedUntracked: string[] }}
  */
 export function recheckDictionary(dict, dir) {
   const approved = dict.replacements.filter((r) => r.approved === true);
   const remaining = [];
   const exempted = [];
   const invalidMarkers = [];
+  const skippedUntracked = [];
+  // apply と同じ範囲で照合する: 追跡外は適用対象外なので残存に数えず、別枠で報告する（非 git なら全件照合）。
+  const tracked = listTrackedFiles(dir);
   const { docs } = collectDocs(dir);
   for (const doc of docs) {
+    if (tracked !== null && !tracked.has(doc.path.split(path.sep).join("/"))) {
+      skippedUntracked.push(doc.path);
+      continue;
+    }
     const abs = path.join(dir, doc.path);
     const text = fs.readFileSync(abs, "utf8");
     for (const m of parseMarkers(text)) {
@@ -36,5 +43,5 @@ export function recheckDictionary(dict, dir) {
       }
     }
   }
-  return { remaining, exempted, invalidMarkers };
+  return { remaining, exempted, invalidMarkers, skippedUntracked };
 }
