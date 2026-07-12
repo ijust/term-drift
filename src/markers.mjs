@@ -1,11 +1,11 @@
-// 免除マーカーの解析（決定的層の共有部品）。
+// 例外として残す語のマーカー解析（決定的層の共有部品）。
 // 書式: <!-- term-drift:allow <語> — <理由一行> -->
-// 理由の無いマーカーは「無効」(invalid) として区別する（免除として効かせない・件数報告に出す）。
+// 理由の無いマーカーは「無効」(invalid) として区別する（例外として扱わず・件数報告に出す）。
 
 const MARKER_RE = /<!--\s*term-drift:allow\s+(.+?)\s*-->/g;
 
 /**
- * テキストから免除マーカーを全て取り出す。
+ * テキストから例外指定のマーカーを全て取り出す。
  * @returns {{ term: string, reason: string | null, line: number }[]}
  *   reason が null のものは無効マーカー（理由なし）。
  */
@@ -29,7 +29,7 @@ export function parseMarkers(text) {
   return markers;
 }
 
-/** そのファイルで term が有効に免除されているか（理由一行つきのマーカーがあるか）。 */
+/** そのファイルで term が理由つきの例外として指定されているか。 */
 export function isExempted(text, term) {
   return parseMarkers(text).some((m) => m.term === term && m.reason !== null);
 }

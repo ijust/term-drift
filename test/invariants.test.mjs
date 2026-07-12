@@ -2,7 +2,7 @@
 // - INV2: 実行コードパス（bin/src）に外部通信（fetch / http(s) リクエスト）が無い
 // - INV6: package.json に dependencies / devDependencies が無い（依存ゼロ・葉）
 // - INV7: rules は agent 非依存（特定エージェント製品のツール名・製品名を含まない）で、
-//         多層検出・3分類・人への即時確認・注入隔離・免除の理由必須の実質を持つ
+//         多層検出・3分類・人への即時確認・注入隔離・例外理由の必須化という実質を持つ
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -60,8 +60,8 @@ test("INV7: rules/detect.md が多層検出・3分類・安全の実質を持つ
   assert.ok(/まとめ承認は成立しない/.test(t), "まとめ承認の禁止");
   // 除外: 識別子・固有名詞（Anti 4 訳語狩り禁止）。
   assert.ok(/識別子/.test(t) && /訳語狩り/.test(t), "識別子の除外と訳語狩りの禁止");
-  // 免除は理由必須（Anti 6）。
-  assert.ok(/理由の無いマーカーは無効/.test(t), "理由なし免除の無効");
+  // 例外として残すには理由が必要（Anti 6）。
+  assert.ok(/理由の無いマーカーは無効/.test(t), "理由なしの例外指定は無効");
 });
 
 test("INV7: rules/workflow.md が一巡と安全の前提を持ち、CLI と LLM の役割分担を規定する", () => {
@@ -73,7 +73,7 @@ test("INV7: rules/workflow.md が一巡と安全の前提を持ち、CLI と LLM
   assert.ok(/rules\/detect\.md/.test(t), "検出正本への参照（二重実装しない）");
 });
 
-test("免除マーカーの書式が rules と実装で一致する（単一正本からの乖離防止）", () => {
+test("例外指定マーカーの書式が rules と実装で一致する（単一正本からの乖離防止）", () => {
   const rulesText = fs.readFileSync(path.join(ROOT, "rules", "detect.md"), "utf8");
   const markerSrc = fs.readFileSync(path.join(ROOT, "src", "markers.mjs"), "utf8");
   assert.ok(rulesText.includes("term-drift:allow"), "rules に書式がある");

@@ -20,7 +20,7 @@ const HELP = `term-drift — AI 支援開発で持ち込まれた用語のずれ
   term-drift scan [dir]              走査対象の収集（部位優先・秘密除外・read-only）
   term-drift ledger [dir]            台帳の解決と内容の表示（.intent/glossary.md 優先）
   term-drift apply <辞書.json> [dir]   承認済み置換辞書の適用（git 管理下のみ・承認印必須）
-  term-drift recheck <辞書.json> [dir] 承認済み置換の残存照合（免除は理由一行つきのみ有効）
+  term-drift recheck <辞書.json> [dir] 承認済み置換の残存照合（例外は理由一行つきのみ有効）
   term-drift rules [dir]             対象リポ固有（なければ配布物）の検出 rules を表示
   term-drift --help                  このヘルプ
 
