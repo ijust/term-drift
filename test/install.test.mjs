@@ -26,7 +26,7 @@ test("引数なしは Claude Code 向けに project-local install する", () =>
   assert.equal(output.installed, true);
   assert.equal(output.agent, "claude");
   assert.ok(fs.existsSync(path.join(dir, ".term-drift", "rules", "detect.md")));
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, ".term-drift", "version.json"), "utf8")), { package: "term-drift", version: "0.2.0" });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, ".term-drift", "version.json"), "utf8")), { package: "term-drift", version: "0.2.1" });
   assert.ok(fs.existsSync(path.join(dir, AGENT_SKILL_PATHS.claude, "SKILL.md")));
   assert.match(result.stderr, /インストール完了/);
 });
