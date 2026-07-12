@@ -28,6 +28,16 @@ The installer places `.term-drift/` and one project-local skill. It records the 
 
 It never overwrites an existing ledger, rules, or an identical skill. If a same-name skill has different contents, installation stops as incomplete instead of replacing it.
 
+To update an existing installation, select its agent explicitly:
+
+```bash
+npx term-drift@latest update --claude
+npx term-drift@latest update --codex
+npx term-drift@latest update --gemini
+```
+
+`update` replaces rules and skill files only when they match a known official release. It refuses to overwrite assets that may have been customized and restores all changed assets if an update fails. It writes `.term-drift/version.json` only after verifying every asset, so a new version cannot be reported as complete while old rules remain.
+
 ## Quick start (recommended: use the skill)
 
 After installation, start term-drift in the target repository. Claude Code supports explicit invocation:
@@ -72,6 +82,7 @@ The CLI is the skill's execution layer. See Commands below when using it directl
 ```text
 term-drift
 term-drift --claude | --codex | --gemini
+term-drift update --claude|--codex|--gemini [dir]
 term-drift init [dir]
 term-drift scan [dir]
 term-drift ledger [dir]

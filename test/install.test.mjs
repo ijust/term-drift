@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { AGENT_SKILL_PATHS, installTermDrift } from "../src/install.mjs";
+import { updateTermDrift } from "../src/update.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLI = path.join(ROOT, "bin", "cli.mjs");
@@ -26,7 +27,12 @@ test("引数なしは Claude Code 向けに project-local install する", () =>
   assert.equal(output.installed, true);
   assert.equal(output.agent, "claude");
   assert.ok(fs.existsSync(path.join(dir, ".term-drift", "rules", "detect.md")));
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, ".term-drift", "version.json"), "utf8")), { package: "term-drift", version: "0.2.1" });
+  const version = JSON.parse(fs.readFileSync(path.join(dir, ".term-drift", "version.json"), "utf8"));
+  assert.equal(version.package, "term-drift");
+  assert.equal(version.version, "0.2.2");
+  assert.equal(version.agent, "claude");
+  assert.ok(version.assets[".term-drift/rules/detect.md"]);
+  assert.ok(version.assets[".claude/skills/term-drift/SKILL.md"]);
   assert.ok(fs.existsSync(path.join(dir, AGENT_SKILL_PATHS.claude, "SKILL.md")));
   assert.match(result.stderr, /インストール完了/);
 });
@@ -125,4 +131,61 @@ test("agent skill の親が対象外 symlink なら外へ書かず拒否する",
   assert.throws(() => installTermDrift(dir, "codex"), /安全のため/);
   assert.deepEqual(fs.readdirSync(outside), []);
   assert.equal(fs.existsSync(path.join(dir, ".term-drift")), false);
+});
+
+test("update は旧version記録と既知の公式資産を一括更新し、最後にmanifestを確定する", () => {
+  const dir = tmp();
+  installTermDrift(dir, "codex");
+  const version = path.join(dir, ".term-drift", "version.json");
+  fs.writeFileSync(version, '{"package":"term-drift","version":"0.2.0"}\n');
+  const result = updateTermDrift(dir, "codex");
+  assert.equal(result.updated, true);
+  assert.equal(result.fromVersion, "0.2.0");
+  const manifest = JSON.parse(fs.readFileSync(version, "utf8"));
+  assert.equal(manifest.version, "0.2.2");
+  assert.equal(manifest.agent, "codex");
+  assert.ok(manifest.assets[".term-drift/rules/workflow.md"]);
+  assert.ok(manifest.assets[".agents/skills/term-drift/SKILL.md"]);
+});
+
+test("update は利用者が変更したrulesを上書きせず、versionとskillも変更しない", () => {
+  const dir = tmp();
+  installTermDrift(dir, "gemini");
+  const rule = path.join(dir, ".term-drift", "rules", "detect.md");
+  const skill = path.join(dir, AGENT_SKILL_PATHS.gemini, "SKILL.md");
+  const version = path.join(dir, ".term-drift", "version.json");
+  fs.writeFileSync(rule, "利用者が調整したrules\n");
+  const beforeSkill = fs.readFileSync(skill);
+  const beforeVersion = fs.readFileSync(version);
+  assert.throws(() => updateTermDrift(dir, "gemini"), /利用者が変更した可能性/);
+  assert.equal(fs.readFileSync(rule, "utf8"), "利用者が調整したrules\n");
+  assert.deepEqual(fs.readFileSync(skill), beforeSkill);
+  assert.deepEqual(fs.readFileSync(version), beforeVersion);
+});
+
+test("update の途中失敗はrules・skill・versionをすべて元に戻す", () => {
+  const dir = tmp();
+  installTermDrift(dir, "claude");
+  const files = [
+    path.join(dir, ".term-drift", "rules", "detect.md"),
+    path.join(dir, ".term-drift", "rules", "workflow.md"),
+    path.join(dir, AGENT_SKILL_PATHS.claude, "SKILL.md"),
+    path.join(dir, ".term-drift", "version.json"),
+  ];
+  const before = files.map((file) => fs.readFileSync(file));
+  assert.throws(() => updateTermDrift(dir, "claude", { testHook() { throw new Error("注入失敗"); } }), /元に戻しました/);
+  files.forEach((file, index) => assert.deepEqual(fs.readFileSync(file), before[index]));
+});
+
+test("CLI update はagent指定を必須にし、成功時だけ更新完了を表示する", () => {
+  const dir = tmp();
+  installTermDrift(dir, "codex");
+  const version = path.join(dir, ".term-drift", "version.json");
+  fs.writeFileSync(version, '{"package":"term-drift","version":"0.2.0"}\n');
+  const missing = cli(["update"], dir);
+  assert.equal(missing.status, 1);
+  assert.doesNotMatch(missing.stderr, /更新完了/);
+  const result = cli(["update", "--codex"], dir);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /更新完了/);
 });

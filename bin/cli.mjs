@@ -11,6 +11,7 @@ import { scan } from "../src/scan.mjs";
 import { loadLedger } from "../src/ledger.mjs";
 import { initTermDrift, resolveLocalRules } from "../src/init.mjs";
 import { installTermDrift } from "../src/install.mjs";
+import { updateTermDrift } from "../src/update.mjs";
 import { loadDictionary, applyDictionary } from "../src/apply.mjs";
 import { recheckDictionary } from "../src/recheck.mjs";
 
@@ -21,6 +22,9 @@ const HELP = `term-drift — AI 支援開発で持ち込まれた用語のずれ
   term-drift --claude                Claude Code 向けに現在のリポへ導入
   term-drift --codex                 Codex 向けに現在のリポへ導入
   term-drift --gemini                Gemini CLI 向けに現在のリポへ導入
+  term-drift update --claude [dir]   Claude Code向け資産を安全に更新
+  term-drift update --codex [dir]    Codex向け資産を安全に更新
+  term-drift update --gemini [dir]   Gemini CLI向け資産を安全に更新
   term-drift init [dir]              対象リポへ目印（.term-drift/）と台帳の雛形を置く（非破壊）
   term-drift scan [dir]              走査対象の収集（部位優先・秘密除外・read-only）
   term-drift ledger [dir]            台帳の解決と内容の表示（.intent/glossary.md 優先）
@@ -73,6 +77,25 @@ switch (command) {
     const result = initTermDrift(dir);
     console.log(JSON.stringify(result, null, 2));
     for (const note of result.notes) console.error(note);
+    break;
+  }
+  case "update": {
+    const flag = rest[0];
+    if (!["--claude", "--codex", "--gemini"].includes(flag)) {
+      console.error("更新対象を指定してください: term-drift update --claude|--codex|--gemini [dir]");
+      process.exit(1);
+    }
+    rejectExtraArgs(rest, 2, "term-drift update --claude|--codex|--gemini [dir]");
+    const dir = resolveDir(rest[1]);
+    const agent = flag.slice(2);
+    try {
+      const result = updateTermDrift(dir, agent);
+      console.log(JSON.stringify(result, null, 2));
+      console.error(`更新完了: ${result.skill}`);
+    } catch (error) {
+      console.error(`更新未完了: ${error.message}`);
+      process.exit(2);
+    }
     break;
   }
   case "scan": {

@@ -2,6 +2,7 @@
 // 配置先の判断は LLM に委ねず、この決定表だけを正本にする。
 
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { initTermDrift, resolveLocalRules } from "./init.mjs";
@@ -17,6 +18,10 @@ export const AGENT_SKILL_PATHS = Object.freeze({
   codex: path.join(".agents", "skills", "term-drift"),
   gemini: path.join(".gemini", "skills", "term-drift"),
 });
+
+function sha256(content) {
+  return crypto.createHash("sha256").update(content).digest("hex");
+}
 
 function listTree(root) {
   const entries = [];
@@ -107,7 +112,14 @@ export function installTermDrift(dir, agent = "claude") {
 
   const skillTarget = path.join(dir, skillRel);
   const versionTarget = path.join(dir, VERSION_FILE);
-  const versionContent = `${JSON.stringify({ package: "term-drift", version: PACKAGE_VERSION }, null, 2)}\n`;
+  const managedAssets = {
+    ".term-drift/rules/detect.md": sha256(fs.readFileSync(path.join(PACKAGE_ROOT, "rules", "detect.md"))),
+    ".term-drift/rules/workflow.md": sha256(fs.readFileSync(path.join(PACKAGE_ROOT, "rules", "workflow.md"))),
+  };
+  for (const entry of listTree(PACKAGED_SKILL).filter((entry) => entry.type === "file")) {
+    managedAssets[path.join(skillRel, entry.rel).split(path.sep).join("/")] = sha256(entry.content);
+  }
+  const versionContent = `${JSON.stringify({ package: "term-drift", version: PACKAGE_VERSION, agent, assets: managedAssets }, null, 2)}\n`;
 
   let versionAlreadyInstalled = false;
   if (fs.existsSync(versionTarget)) {
