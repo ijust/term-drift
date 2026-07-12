@@ -1,0 +1,4 @@
+interface:
+  display_name: "Term Drift"
+  short_description: "用語のずれを実例と書き換え案つきで点検するスキル"
+  default_prompt: "Use $term-drift to inspect this repository for terminology drift."
