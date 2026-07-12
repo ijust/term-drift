@@ -19,6 +19,12 @@ const SECRET_PATTERNS = [
   /^id_(rsa|ed25519|ecdsa)(\.pub)?$/,
   /credential/i,
   /secret/i,
+  /password/i,
+  /passwd/i,
+  /private[-_. ]?keys?/i,
+  /api[-_. ]?keys?/i,
+  /auth[-_. ]?(data|info|notes?)/i,
+  /^(keys?|auth|authentication)$/i,
   /^\.npmrc$/,
   /^\.netrc$/,
   /token/i,
@@ -32,13 +38,14 @@ export function isSecretName(name) {
 }
 
 /** 文書ファイルの優先度（小さいほど先に読む）。 */
-function docPriority(relPath) {
+export function docPriority(relPath) {
   const lower = relPath.toLowerCase();
   const base = path.basename(lower);
-  const inDir = (name) => lower.split("/").includes(name);
-  if (inDir("specs") || inDir("plans") || inDir("plan") || inDir("spec") || base.startsWith("plan-")) return 1; // 計画文書（造語密度の実測最上位）
+  const parts = lower.split(/[\\/]/);
+  const inDir = (name) => parts.includes(name);
+  if (inDir(".intent") || inDir("specs") || inDir("plans") || inDir("plan") || inDir("spec") || base === "plan.md" || base.startsWith("plan-")) return 1; // 計画文書（造語密度の実測最上位）
   const rootDocs = ["readme.md", "agents.md", "claude.md", "contributing.md", "context.md", "gemini.md"];
-  if (!relPath.includes("/") && rootDocs.includes(base)) return 2; // ルートの正本文書
+  if (!/[\\/]/.test(relPath) && rootDocs.includes(base)) return 2; // ルートの正本文書
   if (inDir("docs") || inDir("doc")) return 3;
   return 4;
 }
@@ -59,10 +66,18 @@ export function listTrackedFiles(dir) {
   return new Set(r.stdout.split("\0").filter((p) => p.length > 0));
 }
 
+/** git index と異なる未ステージファイルの集合。非 git 管理下なら null。 */
+export function listDirtyFiles(dir) {
+  const r = spawnSync("git", ["diff", "--name-only", "-z", "--", "."], { cwd: dir, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) return null;
+  return new Set(r.stdout.split("\0").filter((p) => p.length > 0));
+}
+
 /** コミットメッセージの収集（git が無い/非管理下なら空）。read-only。 */
 export function collectCommits(dir, limit = 200) {
   if (!isGitWorkTree(dir)) return [];
-  const r = spawnSync("git", ["log", `-n`, String(limit), "--format=%s"], { cwd: dir, encoding: "utf8" });
+  // 対象が worktree の部分ディレクトリでも、親リポの無関係な履歴を混ぜない。
+  const r = spawnSync("git", ["log", `-n`, String(limit), "--format=%s", "--", "."], { cwd: dir, encoding: "utf8" });
   if (r.status !== 0) return [];
   return r.stdout.split("\n").filter((l) => l.trim().length > 0);
 }
@@ -79,7 +94,7 @@ export function collectDocs(dir) {
       const stat = fs.lstatSync(absChild);
       if (stat.isSymbolicLink()) continue;
       if (stat.isDirectory()) {
-        if (EXCLUDED_DIRS.has(name) || name.startsWith(".")) continue;
+        if (EXCLUDED_DIRS.has(name) || (name.startsWith(".") && name !== ".intent")) continue;
         if (isSecretName(name)) {
           // 秘密名のディレクトリ（secrets/・credentials/ 等）は配下ごと収集しない（INV3）。
           excludedSecrets.push(relChild);
@@ -88,6 +103,9 @@ export function collectDocs(dir) {
         walk(relChild);
         continue;
       }
+      const normalized = relChild.split(path.sep).join("/");
+      // 台帳は ledger が別経路で読む正本なので、走査・一括置換には載せない。
+      if (normalized === ".intent/glossary.md") continue;
       if (isSecretName(name)) {
         excludedSecrets.push(relChild);
         continue;

@@ -81,3 +81,11 @@ test("非破壊: 既存の .term-drift/glossary.md を上書きしない", () =>
   initTermDrift(dir);
   assert.equal(fs.readFileSync(own, "utf8"), "既存の台帳（消してはいけない）\n", "既存台帳が無傷");
 });
+
+test("安全境界: .term-drift symlink 経由で対象リポ外へ書かない", () => {
+  const dir = tmp();
+  const outside = tmp();
+  fs.symlinkSync(outside, path.join(dir, ".term-drift"), "dir");
+  assert.throws(() => initTermDrift(dir), /安全のため/);
+  assert.deepEqual(fs.readdirSync(outside), [], "対象外に台帳・rulesを作らない");
+});

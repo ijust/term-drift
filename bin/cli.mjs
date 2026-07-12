@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { scan } from "../src/scan.mjs";
 import { loadLedger } from "../src/ledger.mjs";
-import { initTermDrift } from "../src/init.mjs";
+import { initTermDrift, resolveLocalRules } from "../src/init.mjs";
 import { loadDictionary, applyDictionary } from "../src/apply.mjs";
 import { recheckDictionary } from "../src/recheck.mjs";
 
@@ -21,7 +21,7 @@ const HELP = `term-drift — AI 支援開発で持ち込まれた用語のずれ
   term-drift ledger [dir]            台帳の解決と内容の表示（.intent/glossary.md 優先）
   term-drift apply <辞書.json> [dir]   承認済み置換辞書の適用（git 管理下のみ・承認印必須）
   term-drift recheck <辞書.json> [dir] 承認済み置換の残存照合（免除は理由一行つきのみ有効）
-  term-drift rules                   検出 rules（単一正本）の場所を表示
+  term-drift rules [dir]             対象リポ固有（なければ配布物）の検出 rules を表示
   term-drift --help                  このヘルプ
 
 検出・分類・言い換え提案の進め方は rules/workflow.md を参照（LLM を持つエージェントが実行します）。
@@ -36,10 +36,17 @@ function resolveDir(arg) {
   return dir;
 }
 
+function rejectExtraArgs(args, max, usage) {
+  if (args.length <= max) return;
+  console.error(`余分な引数があります: ${args.slice(max).join(" ")}\n使い方: ${usage}`);
+  process.exit(1);
+}
+
 const [, , command, ...rest] = process.argv;
 
 switch (command) {
   case "init": {
+    rejectExtraArgs(rest, 1, "term-drift init [dir]");
     const dir = resolveDir(rest[0]);
     const result = initTermDrift(dir);
     console.log(JSON.stringify(result, null, 2));
@@ -47,12 +54,14 @@ switch (command) {
     break;
   }
   case "scan": {
+    rejectExtraArgs(rest, 1, "term-drift scan [dir]");
     const dir = resolveDir(rest[0]);
     const result = scan(dir);
     console.log(JSON.stringify(result, null, 2));
     break;
   }
   case "ledger": {
+    rejectExtraArgs(rest, 1, "term-drift ledger [dir]");
     const dir = resolveDir(rest[0]);
     const ledger = loadLedger(dir);
     if (ledger.path === null) {
@@ -67,6 +76,7 @@ switch (command) {
       console.error("辞書ファイルを指定してください: term-drift apply <辞書.json> [dir]");
       process.exit(1);
     }
+    rejectExtraArgs(rest, 2, "term-drift apply <辞書.json> [dir]");
     const dict = loadDictionary(path.resolve(rest[0]));
     const dir = resolveDir(rest[1]);
     const result = applyDictionary(dict, dir);
@@ -75,6 +85,10 @@ switch (command) {
       console.error("適用を拒否しました: 対象が git 管理下にありません（可逆性を担保できないため書き込みません）");
       process.exit(2);
     }
+    if (result.skippedUntracked.length || result.skippedDirty.length || result.skippedInvalidUtf8.length) {
+      console.error("適用できなかった対象があります。JSON の skipped* を確認してください。");
+      process.exit(3);
+    }
     break;
   }
   case "recheck": {
@@ -82,14 +96,23 @@ switch (command) {
       console.error("辞書ファイルを指定してください: term-drift recheck <辞書.json> [dir]");
       process.exit(1);
     }
+    rejectExtraArgs(rest, 2, "term-drift recheck <辞書.json> [dir]");
     const dict = loadDictionary(path.resolve(rest[0]));
     const dir = resolveDir(rest[1]);
-    console.log(JSON.stringify(recheckDictionary(dict, dir), null, 2));
+    const result = recheckDictionary(dict, dir);
+    console.log(JSON.stringify(result, null, 2));
+    if (result.remaining.length || result.invalidMarkers.length || result.skippedUntracked.length || result.skippedInvalidUtf8.length) {
+      process.exit(3);
+    }
     break;
   }
   case "rules": {
-    const rulesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "rules");
-    console.log(JSON.stringify({ rules: [path.join(rulesDir, "detect.md"), path.join(rulesDir, "workflow.md")] }, null, 2));
+    rejectExtraArgs(rest, 1, "term-drift rules [dir]");
+    const dir = resolveDir(rest[0]);
+    const packagedRulesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "rules");
+    const localRules = resolveLocalRules(dir);
+    const rules = localRules ?? [path.join(packagedRulesDir, "detect.md"), path.join(packagedRulesDir, "workflow.md")];
+    console.log(JSON.stringify({ source: localRules ? "repository" : "package", rules }, null, 2));
     break;
   }
   case "--help":

@@ -143,4 +143,87 @@ test("辞書の形の検証: replacements 配列が無ければ・from が空な
   const bad2 = path.join(dir, "bad2.json");
   fs.writeFileSync(bad2, JSON.stringify({ replacements: [{ from: "", to: "x", approved: true }] }));
   assert.throws(() => loadDictionary(bad2), /不正/);
+  const bad3 = path.join(dir, "bad3.json");
+  fs.writeFileSync(bad3, JSON.stringify({ replacements: [{ from: "x", to: "", approved: true }] }));
+  assert.throws(() => loadDictionary(bad3), /不正/, "空の置換先による削除を拒否する");
+});
+
+test("未ステージ変更のある追跡済みファイルは書き換えず、可逆性を守る", () => {
+  const dir = tmpCopy({ git: true });
+  const file = path.join(dir, "doc-a.md");
+  fs.appendFileSync(file, "未コミットの重要メモ: 結線\n");
+  const before = fs.readFileSync(file);
+  const result = applyDictionary(dict(), dir);
+  assert.ok(result.skippedDirty.includes("doc-a.md"));
+  assert.deepEqual(fs.readFileSync(file), before, "dirtyな適用前内容を保持する");
+});
+
+test("非 UTF-8 文書は1バイトも変更せずスキップする", () => {
+  const dir = tmpCopy({ git: true });
+  const file = path.join(dir, "binary.txt");
+  const before = Buffer.from([0xff, ...Buffer.from("結線\n")]);
+  fs.writeFileSync(file, before);
+  execFileSync("git", ["add", "-A"], { cwd: dir });
+  const result = applyDictionary(dict(), dir);
+  assert.ok(result.skippedInvalidUtf8.includes("binary.txt"));
+  assert.deepEqual(fs.readFileSync(file), before);
+});
+
+test("インラインの別語マーカーは散文の置換・再検査を隠さない", () => {
+  const dir = tmpCopy({ git: true });
+  const file = path.join(dir, "inline-marker.md");
+  fs.writeFileSync(file, "結線は対象。 <!-- term-drift:allow 別語 — 別語だけを残す -->\n");
+  execFileSync("git", ["add", "-A"], { cwd: dir });
+  const result = applyDictionary(dict(), dir);
+  const text = fs.readFileSync(file, "utf8");
+  assert.ok(text.includes("つなぎ込みは対象"));
+  assert.ok(text.includes("term-drift:allow 別語"), "コメントは無傷");
+  assert.ok(result.changes.some((c) => c.file === "inline-marker.md"));
+  assert.equal(recheckDictionary(dict(), dir).remaining.length, 0);
+});
+
+test("Markdown のコード・識別子・リンク先は置換せず、散文だけを変える", () => {
+  const dir = tmpCopy({ git: true });
+  const file = path.join(dir, "code.md");
+  fs.writeFileSync(file, [
+    "drain the queue.",
+    "Run `drain --force` or call `drain()`.",
+    "[drain docs](https://example.invalid/drain)",
+    "```sh",
+    "drain --force",
+    "```",
+    "",
+  ].join("\n"));
+  execFileSync("git", ["add", "-A"], { cwd: dir });
+  const d = { replacements: [{ from: "drain", to: "empty", approved: true }] };
+  applyDictionary(d, dir);
+  const text = fs.readFileSync(file, "utf8");
+  assert.ok(text.includes("empty the queue"));
+  assert.ok(text.includes("`drain --force`"));
+  assert.ok(text.includes("`drain()`"));
+  assert.ok(text.includes("https://example.invalid/drain"));
+  assert.ok(text.includes("\ndrain --force\n```"));
+  assert.deepEqual(recheckDictionary(d, dir).remaining, [], "保護領域の識別子は残存扱いしない");
+});
+
+test("置換先と隣接文字で別の承認語が生まれる境界連鎖を、書き込み前に拒否する", () => {
+  const dir = tmpCopy({ git: true });
+  const file = path.join(dir, "boundary.md");
+  fs.writeFileSync(file, "AC\n");
+  execFileSync("git", ["add", "-A"], { cwd: dir });
+  const d = { replacements: [
+    { from: "A", to: "B", approved: true },
+    { from: "BC", to: "D", approved: true },
+  ] };
+  assert.throws(() => applyDictionary(d, dir), /再生成/);
+  assert.equal(fs.readFileSync(file, "utf8"), "AC\n");
+});
+
+test("コミットだけに残る承認語は、現在文書の残存でなく確認済み履歴として報告する", () => {
+  const dir = tmpCopy({ git: true });
+  execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "結線を導入"], { cwd: dir });
+  applyDictionary(dict(), dir);
+  const result = recheckDictionary(dict(), dir);
+  assert.equal(result.remaining.length, 0);
+  assert.ok(result.historicalAcknowledged.some((h) => h.term === "結線" && h.subject.includes("結線")));
 });

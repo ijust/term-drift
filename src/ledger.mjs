@@ -6,6 +6,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { isContainedRegularFile } from "./path-safety.mjs";
 
 const STATUS_MAP = new Map([
   ["承認済み", "approved"],
@@ -19,9 +20,9 @@ const STATUS_MAP = new Map([
 /** 台帳ファイルの場所を解決する（無ければ null）。 */
 export function resolveLedgerPath(dir) {
   const intentLedger = path.join(dir, ".intent", "glossary.md");
-  if (fs.existsSync(intentLedger)) return intentLedger;
+  if (isContainedRegularFile(dir, intentLedger)) return intentLedger;
   const ownLedger = path.join(dir, ".term-drift", "glossary.md");
-  if (fs.existsSync(ownLedger)) return ownLedger;
+  if (isContainedRegularFile(dir, ownLedger)) return ownLedger;
   return null;
 }
 

@@ -33,8 +33,3 @@ export function parseMarkers(text) {
 export function isExempted(text, term) {
   return parseMarkers(text).some((m) => m.term === term && m.reason !== null);
 }
-
-/** 行がマーカー行か（置換・照合の対象から外すため）。 */
-export function isMarkerLine(line) {
-  return /<!--\s*term-drift:allow\s/.test(line);
-}

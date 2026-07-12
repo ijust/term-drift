@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveLedgerPath } from "./ledger.mjs";
+import { isContainedRegularFile, isExistingPathInside } from "./path-safety.mjs";
 
 // 配布物に同梱された検出 rules（正本）の在り処。
 const PACKAGED_RULES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "rules");
@@ -45,6 +46,10 @@ export function initTermDrift(dir) {
 
   const markerDir = path.join(dir, ".term-drift");
   if (fs.existsSync(markerDir)) {
+    const stat = fs.lstatSync(markerDir);
+    if (stat.isSymbolicLink() || !stat.isDirectory() || !isExistingPathInside(dir, markerDir)) {
+      throw new Error("安全のため init を拒否しました: .term-drift は対象リポ内の通常ディレクトリである必要があります");
+    }
     skipped.push(".term-drift/");
   } else {
     fs.mkdirSync(markerDir, { recursive: true });
@@ -71,11 +76,21 @@ export function initTermDrift(dir) {
   // この場所を読んで検出を実行し、node_modules・npx キャッシュのコピーは見ない（そこには過去に
   // publish された古い版が落ちてくるため）。ここに置いてあるものが、そのリポでの正本になる。
   const rulesDir = path.join(markerDir, "rules");
-  fs.mkdirSync(rulesDir, { recursive: true });
+  if (fs.existsSync(rulesDir)) {
+    const stat = fs.lstatSync(rulesDir);
+    if (stat.isSymbolicLink() || !stat.isDirectory() || !isExistingPathInside(dir, rulesDir)) {
+      throw new Error("安全のため init を拒否しました: .term-drift/rules は対象リポ内の通常ディレクトリである必要があります");
+    }
+  } else {
+    fs.mkdirSync(rulesDir, { recursive: true });
+  }
   for (const name of ["detect.md", "workflow.md"]) {
     const dest = path.join(rulesDir, name);
     const rel = path.relative(dir, dest);
     if (fs.existsSync(dest)) {
+      if (!isContainedRegularFile(dir, dest)) {
+        throw new Error(`安全のため init を拒否しました: ${rel} は対象リポ内の通常ファイルである必要があります`);
+      }
       skipped.push(rel);
       continue;
     }
@@ -85,4 +100,10 @@ export function initTermDrift(dir) {
 
   notes.push("次にやること: エージェントとの会話で「term-drift で用語を点検して」と伝えてください（進め方は .term-drift/rules/workflow.md にあります）。");
   return { created, skipped, ledger, notes };
+}
+
+/** 対象リポ固有の rules が安全に配置済みなら返す。なければ null。 */
+export function resolveLocalRules(dir) {
+  const paths = ["detect.md", "workflow.md"].map((name) => path.join(dir, ".term-drift", "rules", name));
+  return paths.every((p) => isContainedRegularFile(dir, p)) ? paths : null;
 }

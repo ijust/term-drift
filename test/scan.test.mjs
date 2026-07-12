@@ -5,8 +5,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { scan, isSecretName, collectDocs } from "../src/scan.mjs";
+import { scan, isSecretName, collectCommits, collectDocs, docPriority } from "../src/scan.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIX = path.join(__dirname, "fixtures", "scan-repo");
@@ -60,10 +61,50 @@ test("非 git のリポではコミット収集が空で縮退する（エラー
 });
 
 test("isSecretName が代表的な秘密ファイル名を判定する", () => {
-  for (const name of [".env", ".env.local", "server.pem", "id_rsa", "credentials.json", "secret-notes.md", ".npmrc"]) {
+  for (const name of [".env", ".env.local", "server.pem", "id_rsa", "credentials.json", "secret-notes.md", "passwords.md", "keys", ".npmrc"]) {
     assert.ok(isSecretName(name), `${name} は秘密`);
   }
   for (const name of ["README.md", "plan.md", "guide.txt"]) {
     assert.ok(!isSecretName(name), `${name} は秘密でない`);
   }
+});
+
+test("keys/passwords.md のような明白な認証情報パスは配下ごと除外する", () => {
+  const dir = tmpCopy();
+  fs.mkdirSync(path.join(dir, "keys"));
+  fs.writeFileSync(path.join(dir, "keys", "passwords.md"), "do-not-read");
+  const result = scan(dir);
+  assert.ok(!result.docs.some((d) => d.path.includes("passwords")));
+  assert.ok(result.excludedSecrets.includes("keys"));
+});
+
+test(".intent の計画文書は優先走査し、台帳だけは別経路のため除外する", () => {
+  const dir = tmpCopy();
+  fs.mkdirSync(path.join(dir, ".intent", "packets"), { recursive: true });
+  fs.writeFileSync(path.join(dir, ".intent", "packets", "plan.md"), "plan");
+  fs.writeFileSync(path.join(dir, ".intent", "glossary.md"), "ledger");
+  const { docs } = collectDocs(dir);
+  const plan = docs.find((d) => d.path.endsWith(path.join(".intent", "packets", "plan.md")));
+  assert.equal(plan?.priority, 1);
+  assert.ok(!docs.some((d) => d.path.endsWith(path.join(".intent", "glossary.md"))));
+});
+
+test("部分ディレクトリのコミット収集に親リポの無関係な履歴を混ぜない", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "term-drift-history-"));
+  const child = path.join(root, "child");
+  fs.mkdirSync(child);
+  fs.writeFileSync(path.join(child, "doc.md"), "child");
+  execFileSync("git", ["init", "-q"], { cwd: root });
+  execFileSync("git", ["add", "-A"], { cwd: root });
+  execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "child initial"], { cwd: root });
+  fs.writeFileSync(path.join(root, "parent.md"), "parent only");
+  execFileSync("git", ["add", "-A"], { cwd: root });
+  execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "PARENT_SECRET_COMMIT"], { cwd: root });
+  assert.ok(!collectCommits(child).includes("PARENT_SECRET_COMMIT"));
+  assert.ok(collectCommits(child).includes("child initial"));
+});
+
+test("Windows 区切りでも計画文書とルート文書の優先度を誤判定しない", () => {
+  assert.equal(docPriority("specs\\plan.md"), 1);
+  assert.notEqual(docPriority("docs\\README.md"), 2, "入れ子のREADMEをルート扱いしない");
 });

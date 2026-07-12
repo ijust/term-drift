@@ -10,11 +10,15 @@
     "bin",
     "src",
     "rules",
+    "docs",
     "README.md",
     "LICENSE"
   ],
   "engines": {
     "node": ">=18.17"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "node --test"
@@ -22,6 +26,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ijust/term-drift.git"
+  },
+  "homepage": "https://github.com/ijust/term-drift#readme",
+  "bugs": {
+    "url": "https://github.com/ijust/term-drift/issues"
   },
   "keywords": [
     "terminology",
