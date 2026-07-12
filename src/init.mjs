@@ -98,7 +98,7 @@ export function initTermDrift(dir) {
     created.push(rel);
   }
 
-  notes.push("次にやること: エージェントとの会話で「term-drift で用語を点検して」と伝えてください（進め方は .term-drift/rules/workflow.md にあります）。");
+  notes.push("次にやること: インストールした skill から term-drift を起動してください（進め方は .term-drift/rules/workflow.md にあります）。");
   return { created, skipped, ledger, notes };
 }
 

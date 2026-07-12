@@ -10,12 +10,17 @@ import { fileURLToPath } from "node:url";
 import { scan } from "../src/scan.mjs";
 import { loadLedger } from "../src/ledger.mjs";
 import { initTermDrift, resolveLocalRules } from "../src/init.mjs";
+import { installTermDrift } from "../src/install.mjs";
 import { loadDictionary, applyDictionary } from "../src/apply.mjs";
 import { recheckDictionary } from "../src/recheck.mjs";
 
 const HELP = `term-drift — AI 支援開発で持ち込まれた用語のずれを、人承認の言い換えで揃え直す
 
 使い方:
+  term-drift                         Claude Code 向けに現在のリポへ導入（既定）
+  term-drift --claude                Claude Code 向けに現在のリポへ導入
+  term-drift --codex                 Codex 向けに現在のリポへ導入
+  term-drift --gemini                Gemini CLI 向けに現在のリポへ導入
   term-drift init [dir]              対象リポへ目印（.term-drift/）と台帳の雛形を置く（非破壊）
   term-drift scan [dir]              走査対象の収集（部位優先・秘密除外・read-only）
   term-drift ledger [dir]            台帳の解決と内容の表示（.intent/glossary.md 優先）
@@ -45,6 +50,23 @@ function rejectExtraArgs(args, max, usage) {
 const [, , command, ...rest] = process.argv;
 
 switch (command) {
+  case undefined:
+  case "--claude":
+  case "--codex":
+  case "--gemini": {
+    rejectExtraArgs(rest, 0, `term-drift ${command ?? ""}`.trim());
+    const dir = resolveDir();
+    const agent = command === "--codex" ? "codex" : command === "--gemini" ? "gemini" : "claude";
+    try {
+      const result = installTermDrift(dir, agent);
+      console.log(JSON.stringify(result, null, 2));
+      console.error(`インストール完了: ${result.skill}`);
+    } catch (error) {
+      console.error(`インストール未完了: ${error.message}`);
+      process.exit(2);
+    }
+    break;
+  }
   case "init": {
     rejectExtraArgs(rest, 1, "term-drift init [dir]");
     const dir = resolveDir(rest[0]);
@@ -117,7 +139,6 @@ switch (command) {
   }
   case "--help":
   case "-h":
-  case undefined:
     console.log(HELP);
     break;
   default:

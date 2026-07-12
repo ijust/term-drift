@@ -8,27 +8,41 @@ It combines an agent skill with a deterministic CLI to find terminology introduc
 
 ## Installation
 
-The only requirements are Node.js 18.17 or later and git. term-drift has no external package dependencies.
+The only requirements are Node.js 18.17 or later and git. Run the installer from the target project's root for the agent you use.
 
 ```bash
-npm install --global term-drift
+# Claude Code (default)
+npx term-drift@latest
+
+# Explicit agent selection
+npx term-drift@latest --claude
+npx term-drift@latest --codex
+npx term-drift@latest --gemini
 ```
 
-To try it without installing:
+The installer places `.term-drift/` and one project-local skill. It records the installed term-drift version in `.term-drift/version.json`; the skill invokes that pinned CLI version through `npx` rather than using `@latest`. It does not modify the target project's `package.json`, lockfile, or `node_modules`.
 
-```bash
-npx term-drift --help
-```
+- Claude Code: `.claude/skills/term-drift/`
+- Codex: `.agents/skills/term-drift/`
+- Gemini CLI: `.gemini/skills/term-drift/`
+
+It never overwrites an existing ledger, rules, or an identical skill. If a same-name skill has different contents, installation stops as incomplete instead of replacing it.
 
 ## Quick start (recommended: use the skill)
 
-Install the bundled [`skills/term-drift`](skills/term-drift) skill in your AI coding agent, then ask it to inspect the target repository:
+After installation, start term-drift in the target repository. Claude Code supports explicit invocation:
+
+```text
+/term-drift
+```
+
+With Codex or Gemini CLI, ask naturally:
 
 ```text
 Inspect the terminology in this repository with term-drift.
 ```
 
-Humans are not expected to run `term-drift init /path/to/repository`. The skill starts the inspection through the CLI. Only when a persistent ledger or repository-specific rules become necessary does the agent ask for confirmation and run `init` itself. The first inspection can begin without `init`.
+Humans are not expected to assemble `term-drift init /path/to/repository`. The installer determines the locations of the ledger, rules, and skill, and reports completion only after verifying every required asset.
 
 term-drift does not call an LLM API. The agent selected by the user interprets meaning, the human approves decisions, and the deterministic CLI handles scanning, application, and rechecking.
 
@@ -56,6 +70,8 @@ The CLI is the skill's execution layer. See Commands below when using it directl
 ## Commands
 
 ```text
+term-drift
+term-drift --claude | --codex | --gemini
 term-drift init [dir]
 term-drift scan [dir]
 term-drift ledger [dir]
@@ -63,6 +79,8 @@ term-drift apply <dictionary.json> [dir]
 term-drift recheck <dictionary.json> [dir]
 term-drift rules [dir]
 ```
+
+No arguments and the three agent options perform a project-local installation in the current directory. The remaining subcommands form the deterministic execution layer used by the skill and are also available for development, debugging, and other integrations.
 
 `apply` changes only approved entries in tracked, clean, UTF-8 documents. It preserves Markdown code examples, inline code, link destinations, and exception comments. It exits with code 3 when any target cannot be applied or a recheck finds remaining occurrences.
 
