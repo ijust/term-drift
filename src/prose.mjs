@@ -50,6 +50,22 @@ export function proseOccurrenceLines(text, filePath, term) {
   return lines;
 }
 
+/** 散文部分に term が現れる実数を返す（同じ行の複数出現も別々に数える）。 */
+export function proseOccurrenceCount(text, filePath, term) {
+  let count = 0;
+  transformProse(text, filePath, (segment) => {
+    let offset = 0;
+    while (true) {
+      const index = segment.indexOf(term, offset);
+      if (index === -1) break;
+      count += 1;
+      offset = index + term.length;
+    }
+    return segment;
+  });
+  return count;
+}
+
 /** UTF-8 として妥当なファイルだけを文字列にする。妥当でなければ null。 */
 export function readUtf8File(filePath) {
   const bytes = fs.readFileSync(filePath);

@@ -112,7 +112,7 @@ Collect scan targets --> Contextual detection, classification, proposal --> Huma
 
 This division is more than decorative Human-in-the-Loop design. As Bainbridge observed in “Ironies of Automation,” when automation absorbs judgment, humans tend to lose the attention and context needed to supervise it. term-drift leaves semantic authority with the human while assigning repetitive, error-prone replacement to software.
 
-## Approve one term at a time: approval is authority, not confidence
+## Approve one term and one occurrence at a time: approval is authority, not confidence
 
 `approved: true` does not mean “the model is highly confident.” It means that a human individually reviewed the term and replacement and **authorized** the rewrite.
 
@@ -125,6 +125,8 @@ Batch approval is invalid because each term can require a different decision:
 - Defer it because the meaning cannot yet be confirmed.
 
 A bulk confirmation ignores these distinctions and turns the task into “approve the proposal list.” To limit automation bias and approval fatigue, term-drift aligns the unit of approval with the unit of terminology.
+
+Occurrences of the same term can still differ in actor, object, causality, strength, or exceptions. The full inventory is therefore completed before presentation, but the human sees and decides only one location at a time. Approval is not reused even when the same passage appears in another file. The application dictionary requires a target `path` and a passage that matches exactly one location in that file, so deterministic application also rejects semantic bulk replacement.
 
 Ledger registration follows the same rule. Promoting a provisional term to approved changes the team's language; it is a decision, not a classifier output.
 

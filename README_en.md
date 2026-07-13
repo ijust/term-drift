@@ -56,7 +56,9 @@ Humans are not expected to assemble `term-drift init /path/to/repository`. The i
 
 term-drift does not call an LLM API. The agent selected by the user interprets meaning, the human approves decisions, and the deterministic CLI handles scanning, application, and rechecking.
 
-Candidates are not presented as a bare list of words. The skill presents one term at a time with a short quote from an actual use, its source, a proposed replacement, and the rewritten passage. The human can judge the surrounding meaning and the resulting wording before approving, rejecting, or deferring it.
+Candidates are not presented as a bare list of words. After inventorying every occurrence internally, the skill presents one occurrence at a time with its source, a short quote, a proposed replacement, and the rewritten passage. The human decides only that location before moving to the next; approval is never reused for an identical passage in another file.
+
+When the user asks to continue a terminology review, the skill restores prior decisions from the conversation and approved records, completes the occurrence inventory internally, and resumes with the next unresolved occurrence instead of asking the user to choose operational steps again. It asks for a safe resume point only when the available evidence cannot establish one.
 
 The CLI is the skill's execution layer. See Commands below when using it directly for development, debugging, or another agent integration.
 
@@ -66,7 +68,7 @@ The CLI is the skill's execution layer. See Commands below when using it directl
 2. **Detect** — Find not only invented terms absent from the ledger, but also ordinary words repurposed as internal metaphors.
 3. **Classify** — Sort terms into general vocabulary, approved team vocabulary, and suspected unauthorized terminology. Ask the user promptly when uncertain.
 4. **Propose with quotes** — Quote actual usage and propose both replacement wording and the rewritten passage, using ledger examples when available.
-5. **Human approval** — Approve terms individually; batch approval is not valid.
+5. **Human approval** — Review one term and one occurrence at a time; batch approval is not valid.
 6. **Deterministic application** — Apply only approved replacements, only under git, and reversibly.
 7. **Recheck** — Run detection again and converge on no findings, except explicitly justified exceptions.
 
@@ -93,14 +95,14 @@ term-drift rules [dir]
 
 No arguments and the three agent options perform a project-local installation in the current directory. The remaining subcommands form the deterministic execution layer used by the skill and are also available for development, debugging, and other integrations.
 
-`apply` changes only approved entries in tracked, clean, UTF-8 documents. It preserves Markdown code examples, inline code, link destinations, and exception comments. It exits with code 3 when any target cannot be applied or a recheck finds remaining occurrences.
+`apply` changes each approved entry only at one unique occurrence in its repository-relative `path`. It rejects dictionaries without a path and entries matching multiple locations before writing. Targets must be tracked, clean, UTF-8 documents. Markdown code examples, inline code, link destinations, and exception comments are preserved. It exits with code 3 when any target cannot be applied or a recheck finds remaining occurrences.
 
 Minimal dictionary format:
 
 ```json
 {
   "replacements": [
-    { "from": "wiring", "to": "integration", "approved": true }
+    { "term": "wiring", "path": "docs/setup.md", "from": "Finish the wiring between the form and layout.", "to": "Connect the form and layout.", "approved": true }
   ]
 }
 ```
