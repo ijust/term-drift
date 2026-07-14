@@ -29,7 +29,7 @@ test("引数なしは Claude Code 向けに project-local install する", () =>
   assert.ok(fs.existsSync(path.join(dir, ".term-drift", "rules", "detect.md")));
   const version = JSON.parse(fs.readFileSync(path.join(dir, ".term-drift", "version.json"), "utf8"));
   assert.equal(version.package, "term-drift");
-  assert.equal(version.version, "0.2.5");
+  assert.equal(version.version, "0.3.0");
   assert.equal(version.agent, "claude");
   assert.ok(version.assets[".term-drift/rules/detect.md"]);
   assert.ok(version.assets[".claude/skills/term-drift/SKILL.md"]);
@@ -142,7 +142,7 @@ test("update は旧version記録と既知の公式資産を一括更新し、最
   assert.equal(result.updated, true);
   assert.equal(result.fromVersion, "0.2.0");
   const manifest = JSON.parse(fs.readFileSync(version, "utf8"));
-  assert.equal(manifest.version, "0.2.5");
+  assert.equal(manifest.version, "0.3.0");
   assert.equal(manifest.agent, "codex");
   assert.ok(manifest.assets[".term-drift/rules/workflow.md"]);
   assert.ok(manifest.assets[".agents/skills/term-drift/SKILL.md"]);
@@ -164,6 +164,15 @@ test("update は開発版0.2.4の公式資産を既知として引き継ぐ", ()
     "ce133509e027a1f6651267c3c4912f201931c14109381b851a3ab4caa2b31185",
     "4f1e31fbf5bbf6158374a8853dd341eb67811c64aecb4449369f0d1f8d542175",
   ]) assert.ok(source.includes(hash), `0.2.4の公式資産hashを保持する: ${hash}`);
+});
+
+test("update は公開済み0.2.5の公式資産を既知として引き継ぐ", () => {
+  const source = fs.readFileSync(path.join(ROOT, "src", "update.mjs"), "utf8");
+  for (const hash of [
+    "627d1bf950f9f87e655d5dd10215d408a2e605582e5e869f3b9b6cf67111ec49",
+    "dd898983dc349d0c327e42f98f5d301bb3e08111acfdbe54624b720bdc54aba3",
+    "cdd550d32d66e4c5695413e8d11ab3c0fe5eab5a853f01017b3d03d186599cf8",
+  ]) assert.ok(source.includes(hash), `0.2.5の公式資産hashを保持する: ${hash}`);
 });
 
 test("update は利用者が変更したrulesを上書きせず、versionとskillも変更しない", () => {

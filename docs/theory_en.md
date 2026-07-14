@@ -196,6 +196,7 @@ The integration remains loosely coupled:
 
 - Use `.intent/glossary.md` as the canonical ledger when it exists.
 - Use `.term-drift/glossary.md` in projects without intent-planner.
+- Use the ledger's optional classification column to preserve approved general-term decisions as well as team vocabulary. A general-term decision restores only the classification for the default reader; it does not approve specialized local uses or unclear sentences.
 - Keep term-drift's natural-language detection rules as the single source of truth; other tools read them instead of reimplementing them.
 - Avoid runtime dependencies and bidirectional synchronization, keeping term-drift a leaf in the dependency graph.
 

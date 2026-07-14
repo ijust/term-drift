@@ -110,7 +110,7 @@ switch (command) {
     const dir = resolveDir(rest[0]);
     const ledger = loadLedger(dir);
     if (ledger.path === null) {
-      console.log(JSON.stringify({ path: null, entries: [], note: "台帳なし（チーム共通語の判定は縮退します。台帳の新設は .term-drift/glossary.md へ・人の承認後）" }, null, 2));
+      console.log(JSON.stringify({ path: null, entries: [], note: "台帳なし（チーム共通語と承認済み一般語の判定は縮退します。台帳の新設は .term-drift/glossary.md へ・人の承認後）" }, null, 2));
     } else {
       console.log(JSON.stringify(ledger, null, 2));
     }
