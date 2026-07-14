@@ -21,17 +21,21 @@ term-drift approaches this problem by combining Domain-Driven Design's **Ubiquit
 | Reachability of definitions | Information scent and information foraging | Pirolli & Card |
 | Fragmented names for the same concept | The vocabulary problem | Furnas et al. |
 | LLM detection, human approval, deterministic application | Human-in-the-Loop and separation of mechanism from judgment | Amershi et al. / Bainbridge |
-| Per-term approval | Reducing automation bias and preserving selective attention | Parasuraman & Riley / Bainbridge |
+| Individual occurrence inspection with semantic-group approval | Human-in-the-Loop and an explicit authorization scope (grouping is term-drift's safety design) | Amershi et al. / Bainbridge |
 | Zero writes without approval | Authorization and Design by Contract | Meyer |
 | Reasons recorded for retained exceptions | Lint suppression with rationale and design rationale | Nygard / design rationale |
-| Application only to clean, git-managed documents | Reversible change and safe migration | Feathers / Fowler |
+| Application only to git-managed documents without unstaged differences | Changes designed for recoverability | Feathers / Fowler |
 | Rechecking and idempotence after application | Feedback loops and contract checking | Deming / Meyer |
-| Secret exclusion and no external communication | Data minimization and least privilege | Saltzer & Schroeder |
+| Secret exclusion and no outbound feature in the CLI | Collection-scope minimization (a term-drift design choice) and least privilege | Saltzer & Schroeder (least privilege) |
 | Shared ledger with intent-planner | Single source of truth and loose coupling | Evans / docs-as-code |
+
+This table maps design choices to prior research and engineering principles; it does not mean that each source directly evaluated a term-drift feature. In particular, these sources do not directly establish how semantic-group approval changes automation bias or fatigue, or quantify terminology drift specific to AI-assisted development.
 
 ## The problem: AI is a participant that introduces language at scale
 
 Terminology shifts naturally among human developers. AI coding agents, however, can generate large volumes of design documents, commit messages, and explanations in a short time, greatly increasing both the **rate and replication range** of that drift.
+
+Here, **term drift** is an operational concept used by this tool to group problems observed through dogfooding and bounded audits. Work such as Furnas et al.'s vocabulary problem explains components of the problem; it is not cited as a direct measurement of the whole claim that AI amplifies terminology drift.
 
 A model chooses plausible words from general corpora, conventions in other projects, and the recent conversation. Whether a word has been agreed upon in the target project cannot be determined from the model's general vocabulary alone. Wording may sound natural locally while creating project-wide divergence:
 
@@ -112,9 +116,9 @@ Collect scan targets --> Contextual detection, classification, proposal --> Huma
 
 This division is more than decorative Human-in-the-Loop design. As Bainbridge observed in “Ironies of Automation,” when automation absorbs judgment, humans tend to lose the attention and context needed to supervise it. term-drift leaves semantic authority with the human while assigning repetitive, error-prone replacement to software.
 
-## Approve one term and one occurrence at a time: approval is authority, not confidence
+## Approve one term at a time and group semantically equivalent occurrences: approval is authority, not confidence
 
-`approved: true` does not mean “the model is highly confident.” It means that a human individually reviewed the term and replacement and **authorized** the rewrite.
+`approved: true` does not mean “the model is highly confident.” It means that a human reviewed the explicitly listed occurrences and replacements and **authorized** rewrites within that scope.
 
 Batch approval is invalid because each term can require a different decision:
 
@@ -124,11 +128,11 @@ Batch approval is invalid because each term can require a different decision:
 - Retain it in one file with a recorded reason.
 - Defer it because the meaning cannot yet be confirmed.
 
-A bulk confirmation ignores these distinctions and turns the task into “approve the proposal list.” To limit automation bias and approval fatigue, term-drift aligns the unit of approval with the unit of terminology.
+A bulk confirmation ignores these distinctions and turns the task into “approve the proposal list.” Yet asking the same question separately for occurrences with equivalent meaning and rewrites repeats an operation without changing the decision. term-drift therefore inspects every occurrence individually, then groups only those that lead to the same semantic decision. The authorization remains limited to enumerated members. This is a safety and interaction design, not a measured demonstration that automation bias is reduced.
 
-Occurrences of the same term can still differ in actor, object, causality, strength, or exceptions. The full inventory is therefore completed before presentation, but the human sees and decides only one location at a time. Approval is not reused even when the same passage appears in another file. The application dictionary requires a target `path` and a passage that matches exactly one location in that file, so deterministic application also rejects semantic bulk replacement.
+Occurrences of the same term can differ in actor, object, causality, strength, or exceptions. Inventory and semantic inspection are therefore completed before presentation. Only occurrences with equivalent semantic elements, classification, rewrite, and preservation rationale enter the same group. Identical surface text is insufficient; uncertain or differing occurrences fall back to separate groups. Approval applies only to the members explicitly listed in the group and never to an occurrence discovered later.
 
-Restricting approval to one location does not require reciting the full semantic checklist on every turn. term-drift performs the actor, object, causality, strength, and exception checks internally while keeping the normal decision card to a quote, a complete rewrite, and one semantic-preservation sentence. It expands only for ambiguity, preserving human authority without increasing approval fatigue.
+The normal decision card enumerates every member's file, line, quote, and complete rewrite, followed by a shared semantic-preservation sentence. It does not hide scope behind a representative example or count. The user may split a group, and ambiguous members receive separate explanations. Before application, every approved group expands into occurrence-level dictionary entries. Each entry still requires a target `path` and a passage that matches exactly one location, preventing conversational grouping from becoming a bare repository-wide replacement.
 
 Ledger registration follows the same rule. Promoting a provisional term to approved changes the team's language; it is a decision, not a classifier output.
 
@@ -139,11 +143,13 @@ A terminology rewrite looks like a small string edit, but it can affect cross-do
 ### Preconditions for writing
 
 - The target is under git and the file is tracked.
-- A file with unstaged changes is left untouched because its previous contents cannot be restored reliably.
+- A file whose working tree differs from the git index is left untouched because its pre-application contents cannot be recovered from git. Staged-only changes are not included in this check.
 - A document that is not valid UTF-8 is left untouched to prevent byte corruption through re-encoding.
-- Markdown code fences, inline code, HTML comments, and link destinations are protected as machine-facing references.
+- Conventional Markdown code fences, single-line inline code, HTML comments, and link destinations are protected as machine-facing references. The implementation is not a complete parser for malformed Markdown or custom syntax.
 - Empty replacements, duplicate source terms, and dictionaries whose replacements cascade and change on reapplication are rejected.
 - All targets are validated before writing begins, preventing a malformed dictionary from being partially applied.
+
+Prevalidation prevents dictionary errors from causing partial application, but writes across multiple files are not transactional. There is no automatic rollback for an I/O failure or process termination during the write loop; recovery in that case relies on git.
 
 ### Postconditions after writing
 
@@ -164,7 +170,7 @@ But an exception without a reason does not tell later readers whether the findin
 <!-- term-drift:allow wiring — used here in its literal electrical-engineering sense -->
 ```
 
-This follows the same principle as retaining a rationale when suppressing a lint finding. The marker is not merely a hole that hides a warning; it is a small decision record explaining why this occurrence is not rewritten. A marker without a reason is invalid, and a marker for another term on the same line does not hide inspection of surrounding prose.
+This follows the same principle as retaining a rationale when suppressing a lint finding. The current marker is file-scoped rather than occurrence-scoped: it exempts **every occurrence of that term in the same file**. Users must understand that broad scope before adding it. A marker without a reason is invalid, and a marker for another term on the same line does not hide inspection of surrounding prose.
 
 ## Preserve history and distinguish it from present recurrence
 
@@ -174,11 +180,11 @@ term-drift scans commits as **discovery evidence** but never applies replacement
 
 ## Safety boundaries: do not send data out or write beyond the target
 
-Embedding an LLM API could keep detection inside the product, but would also give term-drift responsibility for sending repository contents to an external service. term-drift deliberately does not take that responsibility. The CLI performs no external communication; detection runs in the context of the host agent the user has already selected, which reads the natural-language rules.
+Embedding an LLM API could keep detection inside the product, but would also give term-drift responsibility for sending repository contents to an external service. term-drift deliberately does not take that responsibility. The installed CLI's scan/apply path contains no network client; detection runs in the context of the host agent the user has already selected, which reads the natural-language rules. Installation or update through `npx` may access a package registry, and the host agent's own data handling is outside the guarantee made by the term-drift CLI.
 
 Secret files are excluded during collection, not read and masked afterward. `.env` files, keys, and paths that appear to contain credentials never enter the scan list. Instructions found in scanned material are treated as untrusted text to inspect, not commands to execute.
 
-The same boundary applies to the filesystem. A ledger or rules symlink that points outside the target repository is neither read nor written, and `init` places files only in ordinary directories inside the target. This is a direct application of data minimization and Saltzer and Schroeder's least privilege.
+The same boundary applies to the filesystem. A ledger or rules symlink that points outside the target repository is neither read nor written, and `init` places files only in ordinary directories inside the target. Avoiding authority beyond the target corresponds to Saltzer and Schroeder's least privilege. Excluding secrets during collection is term-drift's own collection-scope minimization decision.
 
 ## Relationship to intent-planner: drift in intent and drift in vocabulary
 
@@ -241,7 +247,7 @@ Instead of freezing vocabulary into a static set of correct answers, term-drift 
 - Herbert H. Clark & Susan E. Brennan, “Grounding in Communication,” in *Perspectives on Socially Shared Cognition*, 1991
 - Herbert H. Clark, *Using Language*, Cambridge University Press, 1996
 - Peter Pirolli & Stuart Card, “Information Foraging in Information Access Environments,” *CHI '95*, 1995
-- John Sweller, “Cognitive Load During Problem Solving,” *Cognitive Science*, 1988
+- John Sweller, “Cognitive Load During Problem Solving,” *Cognitive Science*, 1988 (a general cognitive-load theory; its use for terminology management is analogical)
 
 ### Humans, automation, and safe change
 
@@ -252,7 +258,7 @@ Instead of freezing vocabulary into a static set of correct answers, term-drift 
 - Michael Feathers, *Working Effectively with Legacy Code*, Prentice Hall, 2004
 - Martin Fowler, *Refactoring* (2nd ed.), Addison-Wesley, 2018
 - Michael Nygard, “Documenting Architecture Decisions,” 2011
-- Jerome H. Saltzer & Michael D. Schroeder, “The Protection of Information in Computer Systems,” *Proceedings of the IEEE*, 1975
+- Jerome H. Saltzer & Michael D. Schroeder, “The Protection of Information in Computer Systems,” *Proceedings of the IEEE*, 1975 (least privilege; not a direct source for data minimization)
 
 ### Evolution and feedback
 

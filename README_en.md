@@ -56,9 +56,9 @@ Humans are not expected to assemble `term-drift init /path/to/repository`. The i
 
 term-drift does not call an LLM API. The agent selected by the user interprets meaning, the human approves decisions, and the deterministic CLI handles scanning, application, and rechecking.
 
-Candidates are not presented as a bare list of words. After inventorying every occurrence internally, the skill presents one occurrence at a time with its source, a short quote, a proposed replacement, and the rewritten passage. The human decides only that location before moving to the next; approval is never reused for an identical passage in another file. The default decision card stays compact—quote, rewritten passage, and one semantic-preservation sentence—and expands only for ambiguity or when the user asks for detail.
+Candidates are not presented as a bare list of words. The skill reads every occurrence individually, then groups only occurrences with equivalent meaning and the same proposed decision. It lists every member's file, line, quote, and rewritten passage so the human can approve, reject, defer, or split the group. Identical wording with different meaning stays separate, and approval never covers an unlisted, new, or changed occurrence. The default decision card stays compact and expands only for ambiguity or when the user asks for detail.
 
-When the user asks to continue a terminology review, the skill restores prior decisions from the conversation and approved records, completes the occurrence inventory internally, and resumes with the next unresolved occurrence instead of asking the user to choose operational steps again. It asks for a safe resume point only when the available evidence cannot establish one.
+When the user asks to continue a terminology review, the skill restores prior decisions from the conversation and approved records, completes the occurrence inventory internally, and resumes with the next unresolved semantic group instead of asking the user to choose operational steps again. It asks for a safe resume point only when the available evidence cannot establish one.
 
 The CLI is the skill's execution layer. See Commands below when using it directly for development, debugging, or another agent integration.
 
@@ -68,7 +68,7 @@ The CLI is the skill's execution layer. See Commands below when using it directl
 2. **Detect** — Find not only invented terms absent from the ledger, but also ordinary words repurposed as internal metaphors.
 3. **Classify** — Sort terms into general vocabulary, approved team vocabulary, and suspected unauthorized terminology. Ask the user promptly when uncertain.
 4. **Propose with quotes** — Quote actual usage and propose both replacement wording and the rewritten passage, using ledger examples when available.
-5. **Human approval** — Review one term and one occurrence at a time; batch approval is not valid.
+5. **Human approval** — Review one term at a time and decide groups of individually inspected, semantically equivalent occurrences; multi-term and unlisted-occurrence batch approval is invalid.
 6. **Deterministic application** — Apply only approved replacements, only under git, and reversibly.
 7. **Recheck** — Run detection again and converge on no findings, except explicitly justified exceptions.
 
