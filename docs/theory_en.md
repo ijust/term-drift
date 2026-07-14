@@ -128,6 +128,8 @@ A bulk confirmation ignores these distinctions and turns the task into “approv
 
 Occurrences of the same term can still differ in actor, object, causality, strength, or exceptions. The full inventory is therefore completed before presentation, but the human sees and decides only one location at a time. Approval is not reused even when the same passage appears in another file. The application dictionary requires a target `path` and a passage that matches exactly one location in that file, so deterministic application also rejects semantic bulk replacement.
 
+Restricting approval to one location does not require reciting the full semantic checklist on every turn. term-drift performs the actor, object, causality, strength, and exception checks internally while keeping the normal decision card to a quote, a complete rewrite, and one semantic-preservation sentence. It expands only for ambiguity, preserving human authority without increasing approval fatigue.
+
 Ledger registration follows the same rule. Promoting a provisional term to approved changes the team's language; it is a decision, not a classifier output.
 
 ## Application is a safe migration, not translation

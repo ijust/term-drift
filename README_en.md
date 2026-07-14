@@ -56,7 +56,7 @@ Humans are not expected to assemble `term-drift init /path/to/repository`. The i
 
 term-drift does not call an LLM API. The agent selected by the user interprets meaning, the human approves decisions, and the deterministic CLI handles scanning, application, and rechecking.
 
-Candidates are not presented as a bare list of words. After inventorying every occurrence internally, the skill presents one occurrence at a time with its source, a short quote, a proposed replacement, and the rewritten passage. The human decides only that location before moving to the next; approval is never reused for an identical passage in another file.
+Candidates are not presented as a bare list of words. After inventorying every occurrence internally, the skill presents one occurrence at a time with its source, a short quote, a proposed replacement, and the rewritten passage. The human decides only that location before moving to the next; approval is never reused for an identical passage in another file. The default decision card stays compact—quote, rewritten passage, and one semantic-preservation sentence—and expands only for ambiguity or when the user asks for detail.
 
 When the user asks to continue a terminology review, the skill restores prior decisions from the conversation and approved records, completes the occurrence inventory internally, and resumes with the next unresolved occurrence instead of asking the user to choose operational steps again. It asks for a safe resume point only when the available evidence cannot establish one.
 
