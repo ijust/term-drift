@@ -14,7 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { collectDocs, isGitWorkTree, listDirtyFiles, listTrackedFiles } from "./scan.mjs";
 import { isExempted } from "./markers.mjs";
-import { proseOccurrenceCount, proseOccurrenceLines, readUtf8File, transformProse } from "./prose.mjs";
+import { proseOccurrenceCount, proseOccurrenceLines, proseOccurrenceRanges, readUtf8File, transformProse } from "./prose.mjs";
 
 const normalizeDictionaryPath = (value) => value.replaceAll("\\", "/");
 
@@ -31,6 +31,15 @@ export function validateApprovedReplacements(replacements) {
     }
     if (typeof r.term !== "string" || r.term.length === 0 || typeof r.from !== "string" || r.from.length === 0 || typeof r.to !== "string" || r.to.length === 0) {
       throw new Error(`辞書の項目が不正です: term・from・to は空でない文字列が必要です（term=${JSON.stringify(r?.term)}, from=${JSON.stringify(r?.from)}）`);
+    }
+    if (r.term_occurrences !== undefined) {
+      if (!Number.isInteger(r.term_occurrences) || r.term_occurrences <= 0) {
+        throw new Error(`辞書の項目が不正です: term_occurrences は正の整数が必要です（term_occurrences=${JSON.stringify(r.term_occurrences)}）`);
+      }
+      const actual = proseOccurrenceCount(r.from, r.path, r.term);
+      if (actual !== r.term_occurrences) {
+        throw new Error(`辞書の項目が不正です: ${r.path} の from にある散文上の「${r.term}」は${actual}件ですが、term_occurrences=${r.term_occurrences} です`);
+      }
     }
   }
   const approved = replacements.filter((r) => r.approved === true);
@@ -49,6 +58,27 @@ export function validateApprovedReplacements(replacements) {
           `辞書が不正です: 「${r.from} → ${r.to}」の言い換え先に承認語「${s.from}」が含まれます（置換が連鎖し、再適用のたびに文面が変わるため拒否します）`,
         );
       }
+    }
+  }
+}
+
+/** 対象文書上で承認済み書き換え単位が重ならないことを検証する。 */
+export function validateNonOverlappingRewriteUnits(text, filePath, replacements) {
+  const units = [];
+  for (const r of replacements) {
+    const ranges = proseOccurrenceRanges(text, filePath, r.from);
+    if (ranges.length === 0) continue;
+    if (ranges.length > 1) {
+      throw new Error(`辞書が不正です: ${filePath} の承認文章「${r.from}」が${ranges.length}箇所に一致します（1つの書き換え単位を一意にする周辺文脈を from に含めてください）`);
+    }
+    units.push({ replacement: r, ...ranges[0] });
+  }
+  units.sort((a, b) => a.start - b.start || a.end - b.end);
+  for (let i = 1; i < units.length; i += 1) {
+    const previous = units[i - 1];
+    const current = units[i];
+    if (current.start < previous.end) {
+      throw new Error(`辞書が不正です: ${filePath} の書き換え単位「${previous.replacement.from}」と「${current.replacement.from}」が重なっています`);
     }
   }
 }
@@ -122,6 +152,7 @@ export function applyDictionary(dict, dir) {
       skippedInvalidUtf8.push(doc.path);
       continue;
     }
+    validateNonOverlappingRewriteUnits(text, doc.path, approved.filter((r) => normalizeDictionaryPath(r.path) === relPath));
     const active = [];
     for (const r of approved) {
       if (normalizeDictionaryPath(r.path) !== relPath) continue;
@@ -156,7 +187,7 @@ export function applyDictionary(dict, dir) {
     }
     for (const r of active) {
       const count = result.counts.get(r.from) ?? 0;
-      if (count > 0) changes.push({ file: doc.path, term: r.term, count });
+      if (count > 0) changes.push({ file: doc.path, term: r.term, count, termOccurrences: r.term_occurrences ?? count });
     }
     if (result.text !== text) writes.push({ abs, text: result.text });
   }

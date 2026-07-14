@@ -7,6 +7,7 @@ import path from "node:path";
 import { collectCommits, collectDocs, listTrackedFiles } from "./scan.mjs";
 import { parseMarkers, isExempted } from "./markers.mjs";
 import { proseOccurrenceLines, readUtf8File } from "./prose.mjs";
+import { validateApprovedReplacements, validateNonOverlappingRewriteUnits } from "./apply.mjs";
 
 const normalizeDictionaryPath = (value) => value.replaceAll("\\", "/");
 
@@ -14,6 +15,7 @@ const normalizeDictionaryPath = (value) => value.replaceAll("\\", "/");
  * @returns {{ remaining: {term, file, line}[], exempted: {file, term}[], invalidMarkers: {file, line, term}[], skippedUntracked: string[], skippedInvalidUtf8: string[], historicalAcknowledged: {term, subject}[] }}
  */
 export function recheckDictionary(dict, dir) {
+  validateApprovedReplacements(dict.replacements);
   const approved = dict.replacements.filter((r) => r.approved === true);
   const remaining = [];
   const exempted = [];
@@ -33,6 +35,7 @@ export function recheckDictionary(dict, dir) {
       skippedInvalidUtf8.push(doc.path);
       continue;
     }
+    validateNonOverlappingRewriteUnits(text, doc.path, approved.filter((r) => normalizeDictionaryPath(r.path) === relPath));
     const relevant = approved.some((r) => normalizeDictionaryPath(r.path) === relPath && proseOccurrenceLines(text, doc.path, r.from).length > 0);
     if (tracked !== null && !tracked.has(relPath)) {
       if (relevant) skippedUntracked.push(doc.path);

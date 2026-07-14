@@ -66,6 +66,24 @@ export function proseOccurrenceCount(text, filePath, term) {
   return count;
 }
 
+/** 散文部分に現れる term の UTF-16 範囲を返す（同じ行の複数出現も別々に返す）。 */
+export function proseOccurrenceRanges(text, filePath, term) {
+  if (term.length === 0) return [];
+  // transformProse は保護領域を元の文字列のまま残す。散文だけを同じ長さの NUL に
+  // 置き換えることで、元テキストと同じ offset の散文マスクを作る。
+  const mask = transformProse(text, filePath, (segment) => "\0".repeat(segment.length));
+  const ranges = [];
+  let offset = 0;
+  while (true) {
+    const start = text.indexOf(term, offset);
+    if (start === -1) break;
+    const end = start + term.length;
+    if ([...mask.slice(start, end)].every((char) => char === "\0")) ranges.push({ start, end });
+    offset = end;
+  }
+  return ranges;
+}
+
 /** UTF-8 として妥当なファイルだけを文字列にする。妥当でなければ null。 */
 export function readUtf8File(filePath) {
   const bytes = fs.readFileSync(filePath);
