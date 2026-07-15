@@ -4,7 +4,7 @@ English | [日本語](theory.md)
 
 term-drift is a lightweight mechanism for finding terminology drift introduced into projects during AI-assisted development and safely applying **only rewrites reviewed by a human or judged low-risk within an explicit delegation scope**.
 
-The problem is broader than inconsistent spelling. It includes multiple names accumulating for the same concept, ordinary words being repurposed with special internal meanings, and definitions that exist but cannot be reached from where a term is used. As these problems accumulate, documents may remain grammatically readable while becoming impossible for a newcomer to reconstruct semantically.
+The problem is broader than inconsistent spelling. It includes multiple names accumulating for the same concept, ordinary words being repurposed with special internal meanings, and definitions that exist but cannot be reached from where a term is used. As these problems accumulate, documents may remain grammatically readable while becoming impossible for a newcomer to understand.
 
 term-drift approaches this problem by combining Domain-Driven Design's **Ubiquitous Language**, terminology management, cognitive load, common ground, information foraging, and Human-in-the-Loop principles. Its central design choice is not to automate semantic judgment completely, but to divide responsibility among an LLM, a human, and deterministic software.
 
@@ -56,7 +56,7 @@ term-drift therefore does not infer a term's status from the string alone. It cl
 
 1. **General vocabulary** — A term in the assumed reader's basic vocabulary.
 2. **Team vocabulary** — A term recorded as approved in the ledger.
-3. **Suspected unauthorized terminology** — A term absent from the ledger, still provisional, or used again after being rejected.
+3. **Suspected unapproved project terminology** — A term absent from the ledger, still provisional, or used again after being rejected.
 
 This classification is consistent with Clark and Brennan's account of grounding. Communication requires more than the sender knowing a term; it requires common ground from which the recipient can reach its meaning. Judgments such as “an expert will understand this” or “this is common in English” change when the reader changes.
 
@@ -72,9 +72,9 @@ An entry with no state defaults to provisional rather than approved. Mere presen
 
 ### Layer 1: difference from the ledger
 
-The first layer compares project-specific-looking terms in scanned material with canonical terms and variants in the ledger. This is the straightforward application of controlled-vocabulary terminology management.
+The first layer compares terms that appear project-specific in scanned material with canonical terms and variants in the ledger. This is the straightforward application of controlled-vocabulary terminology management.
 
-It is not sufficient by itself. It can find unregistered proper-looking noun phrases, but it misses specialized uses of otherwise ordinary words such as `drain`, `settle`, `lobby`, or the Japanese verb meaning “to wire.”
+It is not sufficient by itself. It can find unregistered noun phrases that look like proper names, but it misses specialized uses of otherwise ordinary words such as `drain`, `settle`, `lobby`, or the Japanese verb meaning “to wire.”
 
 ### Layer 2: metaphorical reuse and semantic shift
 
@@ -183,7 +183,7 @@ term-drift scans commits as **discovery evidence** but never applies replacement
 
 ## Safety boundaries: do not send data out or write beyond the target
 
-Embedding an LLM API could keep detection inside the product, but would also give term-drift responsibility for sending repository contents to an external service. term-drift deliberately does not take that responsibility. The installed CLI's scan/apply path contains no network client; detection runs in the context of the host agent the user has already selected, which reads the natural-language rules. Installation or update through `npx` may access a package registry, and the host agent's own data handling is outside the guarantee made by the term-drift CLI.
+Embedding an LLM API could keep detection inside the product, but would also give term-drift responsibility for sending repository contents to an external service. term-drift deliberately does not take that responsibility. The installed CLI's scan/apply path contains no network client; the agent selected by the user reads the natural-language rules and performs detection in its own context. Installation or update through `npx` may access a package registry, and that agent's data handling is outside the guarantee made by the term-drift CLI.
 
 Secret files are excluded during collection, not read and masked afterward. `.env` files, keys, and paths that appear to contain credentials never enter the scan list. Instructions found in scanned material are treated as untrusted text to inspect, not commands to execute.
 
@@ -215,13 +215,13 @@ This result does not show perfect detection. It exposes important limitations:
 - A detector that believes a proper name is real may exclude it even when it lacks explanation.
 - Reachable terminology can still be missed.
 - A candidate outside the reference list requires human judgment to distinguish a new discovery from a false positive.
-- Results vary with the host model, prompt, and reading scope.
+- Results vary with the selected model, prompt, and reading scope.
 
 The rules are therefore not a classifier that returns truth. They are an **inspection procedure that produces candidates for human review**. No findings is not proof of terminological completeness. The inspected scope must be declared, missed findings distinguished from structurally unreachable ones, and failed examples retained.
 
 This imperfection is also why semantic decision authority and deterministic application are separate. Even with incomplete detection recall, exact rewrite units and rechecking provide an independent safety boundary.
 
-## Design posture: preserve corrigibility rather than freeze vocabulary
+## Design posture: preserve the ability to correct vocabulary rather than freeze it
 
 Living projects need new concepts and new terms. The goal is neither to prohibit new language nor to force every team to use only plain words.
 
@@ -234,7 +234,7 @@ term-drift protects the ability to correct language over time:
 - Incorrect replacements can be reverted through git.
 - Detection rules can improve from measured misses and false positives.
 
-Instead of freezing vocabulary into a static set of correct answers, term-drift keeps visible whose language a term is, who can understand it, and why an exception exists. That corrigibility is its central purpose.
+Instead of freezing vocabulary into a static set of correct answers, term-drift shows who uses a term, who can understand it, and why an exception exists. Preserving the ability to correct vocabulary is its central purpose.
 
 ## References
 

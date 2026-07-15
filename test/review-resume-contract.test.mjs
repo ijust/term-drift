@@ -12,7 +12,7 @@ const detect = fs.readFileSync(path.join(ROOT, "rules", "detect.md"), "utf8");
 test("再開契約は既決事項の復元順と証拠不足時だけの確認を固定する", () => {
   assert.match(skill, /current conversation first[\s\S]*approved non-overlapping rewrite-unit dictionaries[\s\S]*approved general-term classifications[\s\S]*term-drift:allow/);
   assert.match(workflow, /現在の会話に残っている箇所ごとの判断[\s\S]*承認済みの重ならない書き換え単位の辞書[\s\S]*台帳の承認済み一般語分類[\s\S]*理由付きの `term-drift:allow` 例外/);
-  assert.match(skill, /exact next unresolved point cannot be proved[\s\S]*ask only which safe review point to resume from/);
+  assert.match(skill, /exact next unresolved point cannot be established[\s\S]*ask only which safe review point to resume from/);
   assert.match(workflow, /次に確認すべき未決の箇所を記録から特定できない場合に限り/);
 });
 
@@ -31,7 +31,7 @@ test("内部準備を利用者の操作判断へ変換しない", () => {
   assert.match(skill, /Do not ask the user for term-drift permission[\s\S]*choose a CLI command/);
   assert.match(workflow, /読み取り専用の準備/);
   assert.match(workflow, /操作ごとの許可や、実行する CLI コマンドの選択[\s\S]*利用者に求めない/);
-  assert.match(skill, /Obey any security approval that the host environment itself requires/);
+  assert.match(skill, /Obey any security approval that the execution environment itself requires/);
   assert.match(workflow, /利用中の環境が要求するセキュリティ上の承認には従う/);
 });
 

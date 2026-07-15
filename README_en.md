@@ -26,7 +26,7 @@ The installer places `.term-drift/` and one project-local skill. It records the 
 - Codex: `.agents/skills/term-drift/`
 - Gemini CLI: `.gemini/skills/term-drift/`
 
-It never overwrites an existing ledger, rules, or an identical skill. If a same-name skill has different contents, installation stops as incomplete instead of replacing it.
+It never overwrites an existing ledger, rules, or an identical skill. If a skill with the same name has different contents, installation stops as incomplete instead of replacing it.
 
 To update an existing installation, select its agent explicitly:
 
@@ -66,7 +66,7 @@ The CLI is the skill's execution layer. See Commands below when using it directl
 
 1. **Scan** — Collect repository documents read-only, prioritizing commit messages and planning documents while excluding secrets.
 2. **Detect** — Find not only invented terms absent from the ledger, but also ordinary words repurposed as internal metaphors.
-3. **Classify** — Sort terms into general vocabulary, approved team vocabulary, and suspected unauthorized terminology. Ask the user promptly when uncertain.
+3. **Classify** — Sort terms into general vocabulary, approved team vocabulary, and suspected unapproved project terminology. Ask the user promptly when uncertain.
 4. **Propose with quotes** — Quote actual usage and propose both replacement wording and the rewritten passage, using ledger examples when available.
 5. **Decision authority** — Use guided human review by default; under an explicit bounded delegation, let the agent decide low-risk groups and escalate high-impact or unresolved cases.
 6. **Deterministic application** — Apply only approved replacements, only under git, and reversibly.
