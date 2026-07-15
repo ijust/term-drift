@@ -66,7 +66,7 @@ The ledger records agreement rather than truth, so entries have states:
 - **Provisional** — Someone has begun using it, but the team has not agreed yet.
 - **Rejected** — Do not adopt it. Keep the row so a later reinvention can be detected.
 
-An entry with no state defaults to provisional rather than approved. Mere presence in an existing document must not be laundered into team approval.
+An entry with no state defaults to provisional rather than approved. Mere presence in an existing document must not be treated as evidence of team approval.
 
 ## Why detection has three layers
 
