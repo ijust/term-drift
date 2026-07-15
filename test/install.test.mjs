@@ -29,7 +29,7 @@ test("引数なしは Claude Code 向けに project-local install する", () =>
   assert.ok(fs.existsSync(path.join(dir, ".term-drift", "rules", "detect.md")));
   const version = JSON.parse(fs.readFileSync(path.join(dir, ".term-drift", "version.json"), "utf8"));
   assert.equal(version.package, "term-drift");
-  assert.equal(version.version, "0.3.2");
+  assert.equal(version.version, "0.3.3");
   assert.equal(version.agent, "claude");
   assert.ok(version.assets[".term-drift/rules/detect.md"]);
   assert.ok(version.assets[".claude/skills/term-drift/SKILL.md"]);
@@ -142,7 +142,7 @@ test("update は旧version記録と既知の公式資産を一括更新し、最
   assert.equal(result.updated, true);
   assert.equal(result.fromVersion, "0.2.0");
   const manifest = JSON.parse(fs.readFileSync(version, "utf8"));
-  assert.equal(manifest.version, "0.3.2");
+  assert.equal(manifest.version, "0.3.3");
   assert.equal(manifest.agent, "codex");
   assert.ok(manifest.assets[".term-drift/rules/workflow.md"]);
   assert.ok(manifest.assets[".agents/skills/term-drift/SKILL.md"]);

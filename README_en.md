@@ -113,8 +113,8 @@ Use `decision_source: human-approved` for an individually approved rewrite and `
 ## Documentation
 
 - [Theory](docs/theory_en.md) ([日本語](docs/theory.md)) — Why a ledger, layered detection, explicit decision authority, and deterministic application are necessary
-- [Detection rules](rules/detect.md) — Layered detection, three-way classification, and exclusions (Japanese)
-- [Workflow](rules/workflow.md) — The cycle from scanning through rechecking (Japanese)
+- [Detection rules](rules/detect_en.md) ([日本語](rules/detect.md)) — Layered detection, three-way classification, exclusions, and rewrite proposals
+- [Workflow](rules/workflow_en.md) ([日本語](rules/workflow.md)) — The cycle from scanning through rechecking
 
 ## Status
 
