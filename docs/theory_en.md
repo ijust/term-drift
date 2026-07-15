@@ -33,7 +33,7 @@ This table maps design choices to prior research and engineering principles; it 
 
 ## The problem: AI is a participant that introduces language at scale
 
-Terminology shifts naturally among human developers. AI coding agents, however, can generate large volumes of design documents, commit messages, and explanations in a short time, greatly increasing both the **rate and replication range** of that drift.
+Terminology shifts naturally among human developers. AI coding agents, however, can generate large volumes of design documents, commit messages, and explanations in a short time, greatly increasing both the **speed at which terminology shifts and how widely those shifts are replicated**.
 
 Here, **term drift** is an operational concept used by this tool to group problems observed through dogfooding and explicitly scoped audits. Work such as Furnas et al.'s vocabulary problem explains components of the problem; it is not cited as a direct measurement of the whole claim that AI amplifies terminology drift.
 
