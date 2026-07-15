@@ -20,11 +20,13 @@ npx term-drift@latest --codex
 npx term-drift@latest --gemini
 ```
 
-The installer places `.term-drift/` and one project-local skill. It records the installed term-drift version in `.term-drift/version.json`; the skill invokes that pinned CLI version through `npx` rather than using `@latest`. It does not modify the target project's `package.json`, lockfile, or `node_modules`.
+The installer places `.term-drift/` and one project-local skill. For Gemini CLI, it also installs a `/term-drift` command for explicit invocation. It records the installed term-drift version in `.term-drift/version.json`; the skill invokes that pinned CLI version through `npx` rather than using `@latest`. It does not modify the target project's `package.json`, lockfile, or `node_modules`.
 
 - Claude Code: `.claude/skills/term-drift/`
 - Codex: `.agents/skills/term-drift/`
 - Gemini CLI: `.gemini/skills/term-drift/`
+
+The Gemini CLI command is installed at `.gemini/commands/term-drift.toml`. If Gemini CLI asks whether to trust the folder, review and trust it to load the project-local skill and command.
 
 It never overwrites an existing ledger, rules, or an identical skill. If a skill with the same name has different contents, installation stops as incomplete instead of replacing it.
 
@@ -40,13 +42,15 @@ npx term-drift@latest update --gemini
 
 ## Quick start (recommended: use the skill)
 
-After installation, start term-drift in the target repository. Claude Code supports explicit invocation:
+After installation, start term-drift in the target repository. Claude Code and Gemini CLI support explicit invocation:
 
 ```text
 /term-drift
 ```
 
-With Codex or Gemini CLI, ask naturally:
+If Gemini CLI was already running during installation, run `/skills reload` and `/commands reload` before `/term-drift`. Use `/skills list` to verify that Gemini CLI discovered the skill.
+
+With Codex, ask naturally. Natural-language activation also works in Gemini CLI:
 
 ```text
 Inspect the terminology in this repository with term-drift.

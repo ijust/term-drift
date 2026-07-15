@@ -11,6 +11,7 @@ const PACKAGE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..
 const PACKAGE_VERSION = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")).version;
 const PACKAGED_RULES = path.join(PACKAGE_ROOT, "rules");
 const PACKAGED_SKILL = path.join(PACKAGE_ROOT, "skills", "term-drift");
+const PACKAGED_GEMINI_COMMAND = path.join(PACKAGE_ROOT, "integrations", "gemini", "commands", "term-drift.toml");
 
 // asset単位で照合するため、公式版が混在した不完全インストールも安全に修復できる。
 const KNOWN_OFFICIAL_HASHES = Object.freeze({
@@ -44,6 +45,16 @@ function hash(content) {
   return crypto.createHash("sha256").update(content).digest("hex");
 }
 
+function pathEntryExists(target) {
+  try {
+    fs.lstatSync(target);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 function regularFile(root, file, label) {
   if (!isContainedRegularFile(root, file)) throw new Error(`安全のため更新を拒否しました: ${label} は対象リポ内の通常ファイルである必要があります`);
 }
@@ -63,6 +74,25 @@ function listFiles(root) {
   return files;
 }
 
+function ensureDirectoriesInside(root, dir, createdDirs) {
+  const rel = path.relative(root, dir);
+  if (rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+    throw new Error("安全のため更新を拒否しました: asset の配置先が対象リポ外です");
+  }
+  let current = root;
+  for (const part of rel.split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    if (fs.existsSync(current)) {
+      if (fs.lstatSync(current).isSymbolicLink() || !fs.lstatSync(current).isDirectory() || !isExistingPathInside(root, current)) {
+        throw new Error(`安全のため更新を拒否しました: ${path.relative(root, current)} は対象リポ内の通常ディレクトリである必要があります`);
+      }
+    } else {
+      fs.mkdirSync(current);
+      createdDirs.push(current);
+    }
+  }
+}
+
 function expectedAssets(agent) {
   const skillRel = AGENT_SKILL_PATHS[agent];
   if (!skillRel) throw new Error(`未対応の agent です: ${agent}`);
@@ -72,6 +102,13 @@ function expectedAssets(agent) {
   ];
   for (const rel of listFiles(PACKAGED_SKILL)) {
     assets.push({ key: `skill/${rel.split(path.sep).join("/")}`, targetRel: path.join(skillRel, rel), source: path.join(PACKAGED_SKILL, rel) });
+  }
+  if (agent === "gemini") {
+    assets.push({
+      key: "gemini/commands/term-drift.toml",
+      targetRel: path.join(".gemini", "commands", "term-drift.toml"),
+      source: PACKAGED_GEMINI_COMMAND,
+    });
   }
   return { skillRel, assets };
 }
@@ -104,8 +141,17 @@ export function updateTermDrift(dir, agent, { testHook } = {}) {
   }
 
   const snapshots = new Map();
+  const missingTargets = [];
   for (const asset of assets) {
     const target = path.join(dir, asset.targetRel);
+    if (!pathEntryExists(target)) {
+      const recordedPath = asset.targetRel.split(path.sep).join("/");
+      if (oldVersion.assets?.[recordedPath]) {
+        throw new Error(`更新を拒否しました: 記録済みの asset がありません: ${asset.targetRel}`);
+      }
+      missingTargets.push(target);
+      continue;
+    }
     regularFile(dir, target, asset.targetRel);
     const content = fs.readFileSync(target);
     const known = KNOWN_OFFICIAL_HASHES[asset.key] ?? new Set();
@@ -118,8 +164,19 @@ export function updateTermDrift(dir, agent, { testHook } = {}) {
   snapshots.set(versionTarget, fs.readFileSync(versionTarget));
 
   const nextVersion = versionContent(agent, assets);
+  const createdFiles = [];
+  const createdDirs = [];
   try {
-    for (const asset of assets) fs.writeFileSync(path.join(dir, asset.targetRel), fs.readFileSync(asset.source));
+    for (const asset of assets) {
+      const target = path.join(dir, asset.targetRel);
+      if (missingTargets.includes(target)) {
+        ensureDirectoriesInside(dir, path.dirname(target), createdDirs);
+        fs.writeFileSync(target, fs.readFileSync(asset.source), { flag: "wx" });
+        createdFiles.push(target);
+      } else {
+        fs.writeFileSync(target, fs.readFileSync(asset.source));
+      }
+    }
     testHook?.();
     fs.writeFileSync(versionTarget, nextVersion);
     for (const asset of assets) {
@@ -128,7 +185,21 @@ export function updateTermDrift(dir, agent, { testHook } = {}) {
     if (fs.readFileSync(versionTarget, "utf8") !== nextVersion) throw new Error("更新後のversion検証に失敗しました");
   } catch (error) {
     for (const [target, content] of snapshots) fs.writeFileSync(target, content);
+    for (const file of [...createdFiles].reverse()) {
+      try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
+    }
+    for (const createdDir of [...createdDirs].reverse()) {
+      try { if (fs.existsSync(createdDir) && fs.readdirSync(createdDir).length === 0) fs.rmdirSync(createdDir); } catch {}
+    }
     throw new Error(`更新を完了できなかったため元に戻しました: ${error.message}`);
   }
-  return { updated: true, fromVersion: oldVersion.version, version: PACKAGE_VERSION, agent, skill: skillRel, assets: assets.map((a) => a.targetRel) };
+  return {
+    updated: true,
+    fromVersion: oldVersion.version,
+    version: PACKAGE_VERSION,
+    agent,
+    skill: skillRel,
+    commands: assets.filter((asset) => asset.key.startsWith("gemini/commands/")).map((asset) => asset.targetRel),
+    assets: assets.map((asset) => asset.targetRel),
+  };
 }

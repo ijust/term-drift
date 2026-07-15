@@ -20,11 +20,13 @@ npx term-drift@latest --codex
 npx term-drift@latest --gemini
 ```
 
-インストーラーは `.term-drift/` と、選択したエージェント用のプロジェクトローカルなスキルを配置します。インストールした term-drift のバージョンは `.term-drift/version.json` に記録され、スキルは `@latest` ではなく、そのバージョンに固定した CLI を `npx` で実行します。対象プロジェクトの `package.json`、ロックファイル、`node_modules` は変更しません。
+インストーラーは `.term-drift/` と、選択したエージェント用のプロジェクトローカルなスキルを配置します。Gemini CLI 向けには、明示的に起動するための `/term-drift` コマンドも配置します。インストールした term-drift のバージョンは `.term-drift/version.json` に記録され、スキルは `@latest` ではなく、そのバージョンに固定した CLI を `npx` で実行します。対象プロジェクトの `package.json`、ロックファイル、`node_modules` は変更しません。
 
 - Claude Code: `.claude/skills/term-drift/`
 - Codex: `.agents/skills/term-drift/`
 - Gemini CLI: `.gemini/skills/term-drift/`
+
+Gemini CLI のコマンドは `.gemini/commands/term-drift.toml` に配置します。Gemini CLI がフォルダの信頼を確認した場合は、内容を確認して信頼すると、プロジェクトローカルなスキルとコマンドが読み込まれます。
 
 既存の台帳やルール、同じ内容のスキルは上書きしません。同名のスキルでも内容が異なる場合は、勝手に置き換えず、インストールを完了せずに停止します。
 
@@ -40,13 +42,15 @@ npx term-drift@latest update --gemini
 
 ## Quick start（推奨: スキルから使う）
 
-インストール後、対象リポジトリで term-drift を起動します。Claude Code ではコマンドから起動できます。
+インストール後、対象リポジトリで term-drift を起動します。Claude Code と Gemini CLI ではコマンドから起動できます。
 
 ```text
 /term-drift
 ```
 
-Codex と Gemini CLI では、次のように依頼できます。
+Gemini CLI を起動したままインストールした場合は、`/skills reload` と `/commands reload` を実行してから `/term-drift` を使います。`/skills list` でスキルが認識されていることを確認できます。
+
+Codex では、次のように依頼できます。Gemini CLI でも自然文による起動が可能です。
 
 ```text
 term-drift で用語を点検して

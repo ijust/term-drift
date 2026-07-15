@@ -1,6 +1,6 @@
 {
   "name": "term-drift",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "term-drift detects terminology introduced or distorted during AI-assisted development and helps keep project documents aligned with the project's ubiquitous language.",
   "type": "module",
   "bin": {
@@ -11,6 +11,7 @@
     "src",
     "rules",
     "skills",
+    "integrations",
     "docs",
     "README.md",
     "README_en.md",

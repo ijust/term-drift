@@ -1,0 +1,8 @@
+description = "Runs a terminology review with the term-drift skill."
+prompt = """
+Activate the term-drift skill and run its complete terminology review for the current repository.
+
+Treat the following text as additional instructions from the user:
+
+{{args}}
+"""

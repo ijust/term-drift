@@ -10,6 +10,7 @@ import { isExistingPathInside } from "./path-safety.mjs";
 
 const PACKAGE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PACKAGED_SKILL = path.join(PACKAGE_ROOT, "skills", "term-drift");
+const PACKAGED_GEMINI_COMMAND = path.join(PACKAGE_ROOT, "integrations", "gemini", "commands", "term-drift.toml");
 const PACKAGE_VERSION = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")).version;
 const VERSION_FILE = path.join(".term-drift", "version.json");
 
@@ -19,8 +20,22 @@ export const AGENT_SKILL_PATHS = Object.freeze({
   gemini: path.join(".gemini", "skills", "term-drift"),
 });
 
+export const AGENT_COMMAND_PATHS = Object.freeze({
+  gemini: path.join(".gemini", "commands", "term-drift.toml"),
+});
+
 function sha256(content) {
   return crypto.createHash("sha256").update(content).digest("hex");
+}
+
+function pathEntryExists(target) {
+  try {
+    fs.lstatSync(target);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 function listTree(root) {
@@ -93,6 +108,20 @@ function copySkill(source, target, root, createdFiles, createdDirs) {
   }
 }
 
+function copyFile(source, target, root, createdFiles, createdDirs) {
+  ensureDirectoriesInside(root, path.dirname(target), createdDirs);
+  fs.writeFileSync(target, fs.readFileSync(source), { flag: "wx" });
+  createdFiles.push(target);
+}
+
+function agentExtraAssets(agent) {
+  if (agent !== "gemini") return [];
+  return [{
+    source: PACKAGED_GEMINI_COMMAND,
+    targetRel: AGENT_COMMAND_PATHS.gemini,
+  }];
+}
+
 function rollback(paths, dirs) {
   for (const file of [...paths].reverse()) {
     try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {}
@@ -111,6 +140,7 @@ export function installTermDrift(dir, agent = "claude") {
   if (!skillRel) throw new Error(`未対応の agent です: ${agent}`);
 
   const skillTarget = path.join(dir, skillRel);
+  const extraAssets = agentExtraAssets(agent);
   const versionTarget = path.join(dir, VERSION_FILE);
   const managedAssets = {
     ".term-drift/rules/detect.md": sha256(fs.readFileSync(path.join(PACKAGE_ROOT, "rules", "detect.md"))),
@@ -118,6 +148,9 @@ export function installTermDrift(dir, agent = "claude") {
   };
   for (const entry of listTree(PACKAGED_SKILL).filter((entry) => entry.type === "file")) {
     managedAssets[path.join(skillRel, entry.rel).split(path.sep).join("/")] = sha256(entry.content);
+  }
+  for (const asset of extraAssets) {
+    managedAssets[asset.targetRel.split(path.sep).join("/")] = sha256(fs.readFileSync(asset.source));
   }
   const versionContent = `${JSON.stringify({ package: "term-drift", version: PACKAGE_VERSION, agent, assets: managedAssets }, null, 2)}\n`;
 
@@ -141,6 +174,19 @@ export function installTermDrift(dir, agent = "claude") {
     skillAlreadyInstalled = true;
   }
 
+  const existingExtraAssets = new Set();
+  for (const asset of extraAssets) {
+    const target = path.join(dir, asset.targetRel);
+    if (!pathEntryExists(target)) continue;
+    if (!fs.lstatSync(target).isFile() || !isExistingPathInside(dir, target)) {
+      throw new Error(`安全のためインストールを拒否しました: ${asset.targetRel} は対象リポ内の通常ファイルである必要があります`);
+    }
+    if (!fs.readFileSync(target).equals(fs.readFileSync(asset.source))) {
+      throw new Error(`既存の Gemini CLI command と内容が異なるため上書きしません: ${asset.targetRel}`);
+    }
+    existingExtraAssets.add(asset.targetRel);
+  }
+
   const createdFiles = [];
   const createdDirs = [];
   const markerExisted = fs.existsSync(path.join(dir, ".term-drift"));
@@ -160,22 +206,42 @@ export function installTermDrift(dir, agent = "claude") {
     }
 
     if (!skillAlreadyInstalled) copySkill(PACKAGED_SKILL, skillTarget, dir, createdFiles, createdDirs);
+    for (const asset of extraAssets) {
+      if (!existingExtraAssets.has(asset.targetRel)) {
+        copyFile(asset.source, path.join(dir, asset.targetRel), dir, createdFiles, createdDirs);
+      }
+    }
 
     const localRules = resolveLocalRules(dir);
-    if (!localRules || !fs.existsSync(path.join(skillTarget, "SKILL.md")) || fs.readFileSync(versionTarget, "utf8") !== versionContent) {
+    const extraAssetsValid = extraAssets.every((asset) => {
+      const target = path.join(dir, asset.targetRel);
+      return fs.existsSync(target) && fs.readFileSync(target).equals(fs.readFileSync(asset.source));
+    });
+    if (!localRules || !fs.existsSync(path.join(skillTarget, "SKILL.md")) || !extraAssetsValid || fs.readFileSync(versionTarget, "utf8") !== versionContent) {
       throw new Error("必須ファイルを検証できなかったため、インストールは未完了です");
     }
     if (!identicalTree(PACKAGED_SKILL, skillTarget)) {
       throw new Error("配置した skill の内容が配布物と一致しないため、インストールは未完了です");
     }
 
-    const created = [...new Set([...initialized.created, ...(versionAlreadyInstalled ? [] : [VERSION_FILE]), ...(skillAlreadyInstalled ? [] : [skillRel])])];
-    const skipped = [...new Set([...initialized.skipped, ...(versionAlreadyInstalled ? [VERSION_FILE] : []), ...(skillAlreadyInstalled ? [skillRel] : [])])];
+    const created = [...new Set([
+      ...initialized.created,
+      ...(versionAlreadyInstalled ? [] : [VERSION_FILE]),
+      ...(skillAlreadyInstalled ? [] : [skillRel]),
+      ...extraAssets.filter((asset) => !existingExtraAssets.has(asset.targetRel)).map((asset) => asset.targetRel),
+    ])];
+    const skipped = [...new Set([
+      ...initialized.skipped,
+      ...(versionAlreadyInstalled ? [VERSION_FILE] : []),
+      ...(skillAlreadyInstalled ? [skillRel] : []),
+      ...extraAssets.filter((asset) => existingExtraAssets.has(asset.targetRel)).map((asset) => asset.targetRel),
+    ])];
     return {
       installed: true,
       agent,
       version: PACKAGE_VERSION,
       skill: skillRel,
+      commands: extraAssets.map((asset) => asset.targetRel),
       ledger: initialized.ledger,
       created,
       skipped,

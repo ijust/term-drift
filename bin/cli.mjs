@@ -65,6 +65,9 @@ switch (command) {
       const result = installTermDrift(dir, agent);
       console.log(JSON.stringify(result, null, 2));
       console.error(`インストール完了: ${result.skill}`);
+      if (result.commands.includes(".gemini/commands/term-drift.toml")) {
+        console.error("Gemini CLI command: /term-drift");
+      }
     } catch (error) {
       console.error(`インストール未完了: ${error.message}`);
       process.exit(2);
@@ -92,6 +95,9 @@ switch (command) {
       const result = updateTermDrift(dir, agent);
       console.log(JSON.stringify(result, null, 2));
       console.error(`更新完了: ${result.skill}`);
+      if (result.commands.includes(".gemini/commands/term-drift.toml")) {
+        console.error("Gemini CLI command: /term-drift");
+      }
     } catch (error) {
       console.error(`更新未完了: ${error.message}`);
       process.exit(2);
