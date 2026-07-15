@@ -40,6 +40,60 @@ export function transformProse(text, filePath, transform) {
   }).join("\n");
 }
 
+function rawOccurrenceRanges(text, needle) {
+  if (needle.length === 0) return [];
+  const ranges = [];
+  let offset = 0;
+  while (true) {
+    const start = text.indexOf(needle, offset);
+    if (start === -1) break;
+    ranges.push({ start, end: start + needle.length });
+    offset = start + needle.length;
+  }
+  return ranges;
+}
+
+/**
+ * 書き換え単位の完全一致範囲を返す。
+ * 周辺文脈にはインラインコード・リンク先・改行を含めてよいが、候補語そのものが
+ * 散文として現れる一致だけを対象にする。コード内だけの同文は一致に数えない。
+ */
+export function rewriteUnitOccurrenceRanges(text, filePath, rewriteUnit, term) {
+  const expectedTermOccurrences = proseOccurrenceCount(rewriteUnit, filePath, term);
+  if (expectedTermOccurrences === 0) return [];
+  const proseTermRanges = proseOccurrenceRanges(text, filePath, term);
+  return rawOccurrenceRanges(text, rewriteUnit).filter(({ start, end }) => (
+    proseTermRanges.filter((range) => range.start >= start && range.end <= end).length === expectedTermOccurrences
+  ));
+}
+
+/** 書き換え単位が始まる行番号を返す。 */
+export function rewriteUnitOccurrenceLines(text, filePath, rewriteUnit, term) {
+  return rewriteUnitOccurrenceRanges(text, filePath, rewriteUnit, term).map(({ start }) => (
+    text.slice(0, start).split("\n").length
+  ));
+}
+
+/**
+ * 散文書き換えで保持すべきコード・コメント・リンク先・コードフェンス内容を返す。
+ * 改行は区切りとして扱い、保護された文字列自体の同一性を比較できる形にする。
+ */
+export function protectedFragments(text, filePath) {
+  const mask = transformProse(text, filePath, (segment) => "\0".repeat(segment.length));
+  const fragments = [];
+  let current = "";
+  const flush = () => {
+    if (current.length > 0) fragments.push(current);
+    current = "";
+  };
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] !== "\n" && mask[i] !== "\0") current += text[i];
+    else flush();
+  }
+  flush();
+  return fragments;
+}
+
 /** 散文部分に term が現れる行番号を返す。 */
 export function proseOccurrenceLines(text, filePath, term) {
   const lines = [];

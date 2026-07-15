@@ -6,7 +6,7 @@
 import path from "node:path";
 import { collectCommits, collectDocs, listTrackedFiles } from "./scan.mjs";
 import { parseMarkers, isExempted } from "./markers.mjs";
-import { proseOccurrenceLines, readUtf8File } from "./prose.mjs";
+import { readUtf8File, rewriteUnitOccurrenceLines } from "./prose.mjs";
 import { validateApprovedReplacements, validateNonOverlappingRewriteUnits } from "./apply.mjs";
 
 const normalizeDictionaryPath = (value) => value.replaceAll("\\", "/");
@@ -36,7 +36,7 @@ export function recheckDictionary(dict, dir) {
       continue;
     }
     validateNonOverlappingRewriteUnits(text, doc.path, approved.filter((r) => normalizeDictionaryPath(r.path) === relPath));
-    const relevant = approved.some((r) => normalizeDictionaryPath(r.path) === relPath && proseOccurrenceLines(text, doc.path, r.from).length > 0);
+    const relevant = approved.some((r) => normalizeDictionaryPath(r.path) === relPath && rewriteUnitOccurrenceLines(text, doc.path, r.from, r.term).length > 0);
     if (tracked !== null && !tracked.has(relPath)) {
       if (relevant) skippedUntracked.push(doc.path);
       continue;
@@ -51,7 +51,7 @@ export function recheckDictionary(dict, dir) {
         exempted.push({ file: doc.path, term: r.term });
         continue;
       }
-      for (const line of proseOccurrenceLines(text, doc.path, r.from)) remaining.push({ term: r.term, file: doc.path, line });
+      for (const line of rewriteUnitOccurrenceLines(text, doc.path, r.from, r.term)) remaining.push({ term: r.term, file: doc.path, line });
     }
   }
   // コミット履歴は不変なので書き換えない。承認辞書がその語の人による処置を示すため、

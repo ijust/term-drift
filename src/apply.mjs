@@ -14,7 +14,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { collectDocs, isGitWorkTree, listDirtyFiles, listTrackedFiles } from "./scan.mjs";
 import { isExempted } from "./markers.mjs";
-import { proseOccurrenceCount, proseOccurrenceLines, proseOccurrenceRanges, readUtf8File, transformProse } from "./prose.mjs";
+import {
+  protectedFragments,
+  proseOccurrenceCount,
+  readUtf8File,
+  rewriteUnitOccurrenceRanges,
+} from "./prose.mjs";
 
 const normalizeDictionaryPath = (value) => value.replaceAll("\\", "/");
 
@@ -32,14 +37,22 @@ export function validateApprovedReplacements(replacements) {
     if (typeof r.term !== "string" || r.term.length === 0 || typeof r.from !== "string" || r.from.length === 0 || typeof r.to !== "string" || r.to.length === 0) {
       throw new Error(`辞書の項目が不正です: term・from・to は空でない文字列が必要です（term=${JSON.stringify(r?.term)}, from=${JSON.stringify(r?.from)}）`);
     }
+    const actual = proseOccurrenceCount(r.from, r.path, r.term);
+    if (actual === 0) {
+      throw new Error(`辞書の項目が不正です: ${r.path} の from に散文上の「${r.term}」がありません`);
+    }
     if (r.term_occurrences !== undefined) {
       if (!Number.isInteger(r.term_occurrences) || r.term_occurrences <= 0) {
         throw new Error(`辞書の項目が不正です: term_occurrences は正の整数が必要です（term_occurrences=${JSON.stringify(r.term_occurrences)}）`);
       }
-      const actual = proseOccurrenceCount(r.from, r.path, r.term);
       if (actual !== r.term_occurrences) {
         throw new Error(`辞書の項目が不正です: ${r.path} の from にある散文上の「${r.term}」は${actual}件ですが、term_occurrences=${r.term_occurrences} です`);
       }
+    }
+    const fromProtected = protectedFragments(r.from, r.path);
+    const toProtected = protectedFragments(r.to, r.path);
+    if (JSON.stringify(fromProtected) !== JSON.stringify(toProtected)) {
+      throw new Error(`辞書の項目が不正です: ${r.path} のコード・コメント・リンク先・コードフェンス内容を変更できません`);
     }
   }
   const approved = replacements.filter((r) => r.approved === true);
@@ -66,7 +79,7 @@ export function validateApprovedReplacements(replacements) {
 export function validateNonOverlappingRewriteUnits(text, filePath, replacements) {
   const units = [];
   for (const r of replacements) {
-    const ranges = proseOccurrenceRanges(text, filePath, r.from);
+    const ranges = rewriteUnitOccurrenceRanges(text, filePath, r.from, r.term);
     if (ranges.length === 0) continue;
     if (ranges.length > 1) {
       throw new Error(`辞書が不正です: ${filePath} の承認文章「${r.from}」が${ranges.length}箇所に一致します（1つの書き換え単位を一意にする周辺文脈を from に含めてください）`);
@@ -93,26 +106,26 @@ export function loadDictionary(dictPath) {
   return raw;
 }
 
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /**
  * 1パスの同時置換。from が重なる場合は長い語を優先する（短い語が先に食わない）。
  * @returns {{ text: string, counts: Map<string, number> }}
  */
 function replaceSimultaneously(text, filePath, replacements) {
-  const byFrom = new Map(replacements.map((r) => [r.from, r.to]));
-  const pattern = new RegExp(
-    [...byFrom.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp).join("|"),
-    "g",
-  );
+  const units = replacements.map((replacement) => ({
+    replacement,
+    ...rewriteUnitOccurrenceRanges(text, filePath, replacement.from, replacement.term)[0],
+  })).sort((a, b) => a.start - b.start);
   const counts = new Map();
-  const replaced = transformProse(text, filePath, (segment) => segment.replace(pattern, (m) => {
-    counts.set(m, (counts.get(m) || 0) + 1);
-    return byFrom.get(m);
-  }));
-  return { text: replaced, counts };
+  let output = "";
+  let offset = 0;
+  for (const unit of units) {
+    output += text.slice(offset, unit.start);
+    output += unit.replacement.to;
+    offset = unit.end;
+    counts.set(unit.replacement.from, 1);
+  }
+  output += text.slice(offset);
+  return { text: output, counts };
 }
 
 /**
@@ -156,7 +169,7 @@ export function applyDictionary(dict, dir) {
     const active = [];
     for (const r of approved) {
       if (normalizeDictionaryPath(r.path) !== relPath) continue;
-      const occurrenceCount = proseOccurrenceCount(text, doc.path, r.from);
+      const occurrenceCount = rewriteUnitOccurrenceRanges(text, doc.path, r.from, r.term).length;
       if (occurrenceCount === 0) continue;
       if (occurrenceCount > 1) {
         throw new Error(`辞書が不正です: ${r.path} の承認文章「${r.from}」が${occurrenceCount}箇所に一致します（1箇所を一意にする周辺文脈を from に含めてください）`);
@@ -181,7 +194,7 @@ export function applyDictionary(dict, dir) {
     const result = replaceSimultaneously(text, doc.path, active);
     // 置換先と周辺文字の結合で別の from が新生する境界連鎖もここで拒否する。
     for (const r of approved.filter((r) => normalizeDictionaryPath(r.path) === relPath)) {
-      if (!isExempted(result.text, r.term) && proseOccurrenceLines(result.text, doc.path, r.from).length > 0) {
+      if (!isExempted(result.text, r.term) && rewriteUnitOccurrenceRanges(result.text, doc.path, r.from, r.term).length > 0) {
         throw new Error(`辞書が不正です: ${doc.path} への適用後に承認語「${r.from}」が再生成されます（再適用で文面が変わるため書き込みません）`);
       }
     }
