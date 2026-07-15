@@ -130,6 +130,9 @@ switch (command) {
       console.error("適用を拒否しました: 対象が git 管理下にありません（可逆性を担保できないため書き込みません）");
       process.exit(2);
     }
+    if (result.warningsDirty?.length) {
+      console.error(`警告: 未ステージ変更のある追跡済み文書へ、現在内容の一意な一致だけを適用しました: ${result.warningsDirty.join(", ")}`);
+    }
     if (result.skippedUntracked.length || result.skippedDirty.length || result.skippedInvalidUtf8.length) {
       console.error("適用できなかった対象があります。JSON の skipped* を確認してください。");
       process.exit(3);

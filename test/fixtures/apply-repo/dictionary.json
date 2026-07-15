@@ -1,9 +1,10 @@
 {
+  "decision_metadata_version": 1,
   "replacements": [
-    { "term": "結線", "path": "doc-a.md", "from": "フォームと組版の結線を先に済ませる。", "to": "フォームと組版を先につなぎ込む。", "approved": true, "note": "2026-07-11 利用者がこの箇所を承認（フィクスチャ）" },
-    { "term": "結線", "path": "doc-a.md", "from": "結線が終われば動く。", "to": "つなぎ込みが終われば動く。", "approved": true, "note": "2026-07-11 利用者がこの箇所を承認（フィクスチャ）" },
-    { "term": "結線", "path": "doc-b.md", "from": "この結線は電気工事の結線であり、そのまま残す。", "to": "この接続は電気工事の接続であり、そのまま残す。", "approved": true, "note": "理由付き例外の検査用" },
-    { "term": "結線", "path": "doc-c.md", "from": "理由の無いマーカーは無効。この結線は置換・指摘の対象のまま。", "to": "理由の無いマーカーは無効。このつなぎ込みは置換・指摘の対象のまま。", "approved": true, "note": "無効マーカーの検査用" },
+    { "term": "結線", "path": "doc-a.md", "from": "フォームと組版の結線を先に済ませる。", "to": "フォームと組版を先につなぎ込む。", "approved": true, "decision_source": "human-approved", "decided_at": "2026-07-11", "delegation_scope": null, "note": "利用者がこの箇所を承認（フィクスチャ）" },
+    { "term": "結線", "path": "doc-a.md", "from": "結線が終われば動く。", "to": "つなぎ込みが終われば動く。", "approved": true, "decision_source": "delegated-agent", "decided_at": "2026-07-16", "delegation_scope": "test fixture repository terminology review", "note": "明示委任内の低リスク判断（フィクスチャ）" },
+    { "term": "結線", "path": "doc-b.md", "from": "この結線は電気工事の結線であり、そのまま残す。", "to": "この接続は電気工事の接続であり、そのまま残す。", "approved": true, "decision_source": "human-approved", "decided_at": "2026-07-11", "delegation_scope": null, "note": "理由付き例外の検査用" },
+    { "term": "結線", "path": "doc-c.md", "from": "理由の無いマーカーは無効。この結線は置換・指摘の対象のまま。", "to": "理由の無いマーカーは無効。このつなぎ込みは置換・指摘の対象のまま。", "approved": true, "decision_source": "human-approved", "decided_at": "2026-07-11", "delegation_scope": null, "note": "無効マーカーの検査用" },
     { "term": "配線", "path": "doc-d.md", "from": "推奨→確認の配線を通す。", "to": "推奨から確認への流れを作る。", "note": "承認印なし＝適用されないことのテスト" }
   ]
 }

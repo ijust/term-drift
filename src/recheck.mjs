@@ -7,7 +7,7 @@ import path from "node:path";
 import { collectCommits, collectDocs, listTrackedFiles } from "./scan.mjs";
 import { parseMarkers, isExempted } from "./markers.mjs";
 import { readUtf8File, rewriteUnitOccurrenceLines } from "./prose.mjs";
-import { validateApprovedReplacements, validateNonOverlappingRewriteUnits } from "./apply.mjs";
+import { validateDictionary, validateNonOverlappingRewriteUnits } from "./apply.mjs";
 
 const normalizeDictionaryPath = (value) => value.replaceAll("\\", "/");
 
@@ -15,7 +15,7 @@ const normalizeDictionaryPath = (value) => value.replaceAll("\\", "/");
  * @returns {{ remaining: {term, file, line}[], exempted: {file, term}[], invalidMarkers: {file, line, term}[], skippedUntracked: string[], skippedInvalidUtf8: string[], historicalAcknowledged: {term, subject}[] }}
  */
 export function recheckDictionary(dict, dir) {
-  validateApprovedReplacements(dict.replacements);
+  validateDictionary(dict);
   const approved = dict.replacements.filter((r) => r.approved === true);
   const remaining = [];
   const exempted = [];

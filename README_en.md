@@ -4,7 +4,7 @@ English | [日本語](README.md)
 
 term-drift detects terminology introduced or distorted during AI-assisted development and helps keep project documents aligned with the project's ubiquitous language.
 
-It combines an agent skill with a deterministic CLI to find terminology introduced or semantically distorted during AI-assisted development and align project documentation with its ubiquitous language using only human-approved rewrites.
+It combines an agent skill with a deterministic CLI to find terminology introduced or semantically distorted during AI-assisted development and align project documentation through guided review or explicitly delegated low-risk rewrites.
 
 ## Installation
 
@@ -54,9 +54,9 @@ Inspect the terminology in this repository with term-drift.
 
 Humans are not expected to assemble `term-drift init /path/to/repository`. The installer determines the locations of the ledger, rules, and skill, and reports completion only after verifying every required asset.
 
-term-drift does not call an LLM API. The agent selected by the user interprets meaning, the human approves decisions, and the deterministic CLI handles scanning, application, and rechecking.
+term-drift does not call an LLM API. The selected agent interprets meaning and may decide explicitly delegated low-risk rewrites, humans retain high-impact and ledger decisions, and the deterministic CLI handles scanning, application, and rechecking.
 
-Candidates are not presented as a bare list of words. The skill reads every occurrence individually, then groups only occurrences with equivalent meaning and the same proposed decision. It lists every member's file, line, quote, and rewritten passage so the human can approve, reject, defer, or split the group. Identical wording with different meaning stays separate, and approval never covers an unlisted, new, or changed occurrence. The default decision card stays compact and expands only for ambiguity or when the user asks for detail.
+Candidates are not treated as a bare list of words. The skill reads every occurrence individually, then groups only occurrences with equivalent meaning and the same proposed decision. Guided review lets the human approve, reject, defer, or split each group. If the user explicitly delegates a repository, current review, term, or other clear scope, the agent may decide low-risk groups and asks only about unresolved meaning, material alternatives, or wording that may affect obligations, legal or security meaning, public APIs, or runtime behavior. Broad delegation is discouraged; occurrence inspection and an auditable rewrite list remain required.
 
 When the user asks to continue a terminology review, the skill restores prior decisions from the conversation and approved records, completes the occurrence inventory internally, and resumes with the next unresolved semantic group instead of asking the user to choose operational steps again. A term approved as general can be stored in the ledger's optional classification column with status `approved` and classification `general`, so another session does not ask for the same classification again. This persists only the term classification; specialized local uses and unclear sentences are still reviewed. The skill asks for a safe resume point only when the available evidence cannot establish one.
 
@@ -68,13 +68,13 @@ The CLI is the skill's execution layer. See Commands below when using it directl
 2. **Detect** — Find not only invented terms absent from the ledger, but also ordinary words repurposed as internal metaphors.
 3. **Classify** — Sort terms into general vocabulary, approved team vocabulary, and suspected unauthorized terminology. Ask the user promptly when uncertain.
 4. **Propose with quotes** — Quote actual usage and propose both replacement wording and the rewritten passage, using ledger examples when available.
-5. **Human approval** — Review one term at a time and decide groups of individually inspected, semantically equivalent occurrences; multi-term and unlisted-occurrence batch approval is invalid.
+5. **Decision authority** — Use guided human review by default; under an explicit bounded delegation, let the agent decide low-risk groups and escalate high-impact or unresolved cases.
 6. **Deterministic application** — Apply only approved replacements, only under git, and reversibly.
 7. **Recheck** — Run detection again and converge on no findings, except explicitly justified exceptions.
 
 ## Safety guarantees
 
-- Never write a single byte for an unapproved replacement.
+- Write only replacements authorized by guided approval or an explicit bounded delegation.
 - Never contact an external service at runtime.
 - Never scan secret files such as `.env`, keys, or credentials.
 - Never silently decide an uncertain term; ask the user promptly.
@@ -95,21 +95,24 @@ term-drift rules [dir]
 
 No arguments and the three agent options perform a project-local installation in the current directory. The remaining subcommands form the deterministic execution layer used by the skill and are also available for development, debugging, and other integrations.
 
-`apply` changes each approved entry only at one unique occurrence in its repository-relative `path`. It rejects dictionaries without a path and entries matching multiple locations before writing. Targets must be tracked, clean, UTF-8 documents. Markdown code examples, inline code, link destinations, and exception comments are preserved. It exits with code 3 when any target cannot be applied or a recheck finds remaining occurrences.
+`apply` changes each decided entry only at one unique occurrence in its repository-relative `path`. The new format also validates decision provenance and returns the rewrite unit's `from` and `to` together with `decisionSource`, `decidedAt`, and `delegationScope` for every applied change. It rejects dictionaries without a path and entries matching multiple locations before writing. Targets must be tracked UTF-8 documents. If a target has unstaged changes and `from` still matches uniquely in the current content, `apply` preserves unrelated changes, performs the rewrite, and reports the file in `warningsDirty` and stderr. Untracked files, invalid UTF-8, ambiguous or overlapping rewrites, and protected Markdown fragments remain blocked.
 
-Minimal dictionary format:
+Minimal new dictionary format with durable decision provenance:
 
 ```json
 {
+  "decision_metadata_version": 1,
   "replacements": [
-    { "term": "wiring", "path": "docs/setup.md", "from": "Finish the wiring between the form and layout.", "to": "Connect the form and layout.", "approved": true }
+    { "term": "wiring", "term_occurrences": 1, "path": "docs/setup.md", "from": "Finish the wiring between the form and layout.", "to": "Connect the form and layout.", "approved": true, "decision_source": "human-approved", "decided_at": "2026-07-16", "delegation_scope": null }
   ]
 }
 ```
 
+Use `decision_source: human-approved` for an individually approved rewrite and `decision_source: delegated-agent` for a low-risk decision made inside explicit delegation; the latter records that boundary in `delegation_scope`. Legacy dictionaries remain applicable, but their changes report `decisionSource: legacy-unknown`. Retain applied dictionaries under `.term-drift/` to preserve provenance without embedding markers in prose.
+
 ## Documentation
 
-- [Theory](docs/theory_en.md) ([日本語](docs/theory.md)) — Why a ledger, layered detection, per-term approval, and deterministic application are necessary
+- [Theory](docs/theory_en.md) ([日本語](docs/theory.md)) — Why a ledger, layered detection, explicit decision authority, and deterministic application are necessary
 - [Detection rules](rules/detect.md) — Layered detection, three-way classification, and exclusions (Japanese)
 - [Workflow](rules/workflow.md) — The cycle from scanning through rechecking (Japanese)
 

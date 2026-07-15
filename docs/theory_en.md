@@ -2,13 +2,13 @@
 
 English | [日本語](theory.md)
 
-term-drift is a lightweight mechanism for finding terminology drift introduced into projects during AI-assisted development and safely applying **only human-approved rewrites**.
+term-drift is a lightweight mechanism for finding terminology drift introduced into projects during AI-assisted development and safely applying **only rewrites reviewed by a human or judged low-risk within an explicit delegation scope**.
 
 The problem is broader than inconsistent spelling. It includes multiple names accumulating for the same concept, ordinary words being repurposed with special internal meanings, and definitions that exist but cannot be reached from where a term is used. As these problems accumulate, documents may remain grammatically readable while becoming impossible for a newcomer to reconstruct semantically.
 
 term-drift approaches this problem by combining Domain-Driven Design's **Ubiquitous Language**, terminology management, cognitive load, common ground, information foraging, and Human-in-the-Loop principles. Its central design choice is not to automate semantic judgment completely, but to divide responsibility among an LLM, a human, and deterministic software.
 
-**You do not need this document to use term-drift.** The operational procedure is in [`rules/workflow.md`](../rules/workflow.md). This document is a reference for understanding why term-drift needs a ledger, why dictionary comparison is insufficient, and why approval happens one term at a time.
+**You do not need this document to use term-drift.** The operational procedure is in [`rules/workflow.md`](../rules/workflow.md). This document is a reference for understanding why term-drift needs a ledger, why dictionary comparison is insufficient, and why decision authority must be explicit.
 
 ## Concept map
 
@@ -20,11 +20,11 @@ term-drift approaches this problem by combining Domain-Driven Design's **Ubiquit
 | Internal repurposing of ordinary words | Metaphor, polysemy, semantic shift | Lakoff & Johnson |
 | Reachability of definitions | Information scent and information foraging | Pirolli & Card |
 | Fragmented names for the same concept | The vocabulary problem | Furnas et al. |
-| LLM detection, human approval, deterministic application | Human-in-the-Loop and separation of mechanism from judgment | Amershi et al. / Bainbridge |
-| Individual occurrence inspection with semantic-group approval | Human-in-the-Loop and an explicit authorization scope (grouping is term-drift's safety design) | Amershi et al. / Bainbridge |
-| Zero writes without approval | Authorization and Design by Contract | Meyer |
+| LLM detection, human high-impact decisions, deterministic application | Human-in-the-Loop, delegation, and separation of mechanism from judgment | Amershi et al. / Bainbridge |
+| Individual occurrence inspection with semantic-group decisions | Human-in-the-Loop and an explicit authorization scope (grouping is term-drift's safety design) | Amershi et al. / Bainbridge |
+| Zero writes without decision authority | Authorization and Design by Contract | Meyer |
 | Reasons recorded for retained exceptions | Lint suppression with rationale and design rationale | Nygard / design rationale |
-| Application only to git-managed documents without unstaged differences | Changes designed for recoverability | Feathers / Fowler |
+| Unique-range application to tracked documents with dirty-file warnings | Small changes that preserve existing worktree edits | Feathers / Fowler |
 | Rechecking and idempotence after application | Feedback loops and contract checking | Deming / Meyer |
 | Secret exclusion and no outbound feature in the CLI | Collection-scope minimization (a term-drift design choice) and least privilege | Saltzer & Schroeder (least privilege) |
 | Shared ledger with intent-planner | Single source of truth and loose coupling | Evans / docs-as-code |
@@ -100,27 +100,29 @@ These layers are complementary, covering different failure modes rather than com
 
 Whether a term is general vocabulary, an actual external proper name, or something a new reader needs explained cannot be determined from its characters alone. A fixed basic-vocabulary list creates a new maintenance problem across languages, professions, and projects. Treating web frequency as truth conflates external popularity with team agreement.
 
-term-drift delegates this reading to an LLM, but does not convert the LLM's judgment into authority.
+term-drift delegates this reading to an LLM. Human judgment is the default, while an explicit bounded delegation may authorize the LLM to decide low-risk rewrites.
 
 ```text
-Collect scan targets --> Contextual detection, classification, proposal --> Human judgment per term
- deterministic CLI                    host LLM                              human
+Collect scan targets --> Contextual detection, classification, proposal --> Guided or delegated decision
+ deterministic CLI                    host LLM                              human / host LLM
        |                                                                         |
-       +------------ approved dictionary --> apply --> recheck <----------------+
+       +------------- decided dictionary --> apply --> recheck <----------------+
                                                 deterministic CLI
 ```
 
-- The **LLM** produces candidates and reasons. It asks the human rather than guessing when uncertain.
-- The **human** approves, rejects, or defers based on meaning, audience, and team agreement.
-- The **CLI** applies only explicit approved data, deterministically.
+- The **LLM** produces candidates and reasons and may decide explicitly delegated low-risk rewrites. It escalates uncertainty and high-impact wording.
+- The **human** defines delegation scope and retains important semantic and ledger decisions.
+- The **CLI** applies only explicit decided rewrite units, deterministically.
 
-This division is more than decorative Human-in-the-Loop design. As Bainbridge observed in “Ironies of Automation,” when automation absorbs judgment, humans tend to lose the attention and context needed to supervise it. term-drift leaves semantic authority with the human while assigning repetitive, error-prone replacement to software.
+This division is more than decorative Human-in-the-Loop design. As Bainbridge observed in “Ironies of Automation,” when automation absorbs judgment, humans tend to lose the attention and context needed to supervise it. term-drift therefore leaves high-impact semantic decisions and delegation scope with the human while assigning bounded low-risk decisions and repetitive application to software.
 
-## Approve one term at a time and group semantically equivalent occurrences: approval is authority, not confidence
+## Make decision authority explicit and group semantically equivalent occurrences
 
-`approved: true` does not mean “the model is highly confident.” It means that a human reviewed the explicitly listed occurrences and replacements and **authorized** rewrites within that scope.
+`approved: true` does not mean “the model is highly confident.” It means that a human approved the rewrite directly or explicitly delegated a clear scope in which the agent judged the rewrite low-risk.
 
-Batch approval is invalid because each term can require a different decision:
+New dictionaries do not leave that distinction only in a free-form `note`. They declare `decision_metadata_version: 1` and record `decision_source`, `decided_at`, and `delegation_scope` for each change. Individually approved rewrites use `human-approved`; decisions inside explicit delegation use `delegated-agent`. The CLI validates those combinations before writing and carries the same fields into its result. Retaining the dictionary under `.term-drift/` preserves provenance without inserting markers into prose. Legacy dictionaries remain readable for compatibility, but their provenance is `legacy-unknown`.
+
+Guided review remains the default. Unbounded batch approval is discouraged because each term can require a different decision:
 
 - Leave it as general vocabulary.
 - Register it as shared team vocabulary.
@@ -128,9 +130,9 @@ Batch approval is invalid because each term can require a different decision:
 - Retain it in one file with a recorded reason.
 - Defer it because the meaning cannot yet be confirmed.
 
-A bulk confirmation ignores these distinctions and turns the task into “approve the proposal list.” Yet asking the same question separately for occurrences with equivalent meaning and rewrites repeats an operation without changing the decision. term-drift therefore inspects every occurrence individually, then groups only those that lead to the same semantic decision. The authorization remains limited to enumerated members. This is a safety and interaction design, not a measured demonstration that automation bias is reduced.
+When a user explicitly delegates a repository, current review, term, or other clear scope, the agent may decide low-risk groups after inspecting every occurrence. It escalates unresolved meaning, material alternatives, or wording that may affect obligations, legal or security meaning, public APIs, or runtime behavior. Delegation reduces repetitive questions; it does not remove occurrence inspection or the auditable list of applied rewrite units.
 
-Occurrences of the same term can differ in actor, object, causality, strength, or exceptions. Inventory and semantic inspection are therefore completed before presentation. Only occurrences with equivalent semantic elements, classification, rewrite, and preservation rationale enter the same group. Identical surface text is insufficient; uncertain or differing occurrences fall back to separate groups. Approval applies only to the members explicitly listed in the group and never to an occurrence discovered later.
+Occurrences of the same term can differ in actor, object, causality, strength, or exceptions. Only occurrences with equivalent semantic elements, classification, rewrite, and preservation rationale enter the same group. In guided review, approval applies to listed members. Under explicit delegation, a later occurrence inside the delegated scope may be agent-decided only after the same individual inspection.
 
 The normal decision card enumerates every member's file, line, quote, and complete rewrite, followed by a shared semantic-preservation sentence. It does not hide scope behind a representative example or count. The user may split a group, and ambiguous members receive separate explanations. Before application, every approved group expands into occurrence-level dictionary entries. Each entry still requires a target `path` and a passage that matches exactly one location, preventing conversational grouping from becoming a bare repository-wide replacement.
 
@@ -143,10 +145,11 @@ A terminology rewrite looks like a small string edit, but it can affect cross-do
 ### Preconditions for writing
 
 - The target is under git and the file is tracked.
-- A file whose working tree differs from the git index is left untouched because its pre-application contents cannot be recovered from git. Staged-only changes are not included in this check.
+- If a tracked file differs from the git index, application may continue when the approved `from` passage still matches uniquely in the current content. Unrelated worktree edits are preserved and the file is reported as a dirty-file warning; ambiguous or overlapping rewrites remain blocked.
 - A document that is not valid UTF-8 is left untouched to prevent byte corruption through re-encoding.
 - Conventional Markdown code fences, single-line inline code, HTML comments, and link destinations are protected as machine-facing references. The implementation is not a complete parser for malformed Markdown or custom syntax.
 - Empty replacements, duplicate source terms, and dictionaries whose replacements cascade and change on reapplication are rejected.
+- New-format entries are rejected when their structured human-approval or delegated-decision metadata is incomplete.
 - All targets are validated before writing begins, preventing a malformed dictionary from being partially applied.
 
 Prevalidation prevents dictionary errors from causing partial application, but writes across multiple files are not transactional. There is no automatic rollback for an I/O failure or process termination during the write loop; recovery in that case relies on git.
@@ -216,7 +219,7 @@ This result does not show perfect detection. It exposes important limitations:
 
 The rules are therefore not a classifier that returns truth. They are an **inspection procedure that produces candidates for human review**. No findings is not proof of terminological completeness. The inspected scope must be declared, missed findings distinguished from structurally unreachable ones, and failed examples retained.
 
-This imperfection is also why human approval and deterministic application are separate. Even with incomplete detection recall, the system can independently maintain strong safety against unapproved changes.
+This imperfection is also why semantic decision authority and deterministic application are separate. Even with incomplete detection recall, exact rewrite units and rechecking provide an independent safety boundary.
 
 ## Design posture: preserve corrigibility rather than freeze vocabulary
 

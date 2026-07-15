@@ -3,6 +3,8 @@
 //   - approved: true の項目だけを適用する。無い項目は1バイトも書かず「拒否」として報告する。
 //   - 対象が git 管理下に無ければ適用自体を拒否する（可逆性の担保・提案止まり）。
 //   - git 追跡外のファイルには書かない（git から復元できないため）。スキップとして報告する。
+//   - 未ステージ変更のある追跡済みファイルは、現在内容への一意照合を保ったまま警告付きで適用する。
+//     対象外の差分は保持し、曖昧一致・交差・保護領域変更は従来どおり拒否する。
 //   - 承認単位は対象ファイル内の一意な文章1箇所。path の無い辞書や、同じ文章が対象内で
 //     複数箇所に当たる辞書は、意味判断を一括適用しないため書き込み前に拒否する。
 //   - 置換は1パスの同時置換（置換結果へ別の置換を連鎖させない）。言い換え先に承認語を含む
@@ -22,13 +24,58 @@ import {
 } from "./prose.mjs";
 
 const normalizeDictionaryPath = (value) => value.replaceAll("\\", "/");
+const DECISION_METADATA_VERSION = 1;
+const DECISION_SOURCES = new Set(["human-approved", "delegated-agent"]);
+
+function isValidIsoDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function hasDecisionMetadata(replacement) {
+  return replacement?.decision_source !== undefined
+    || replacement?.decided_at !== undefined
+    || replacement?.delegation_scope !== undefined;
+}
+
+function validateDecisionMetadata(replacement, required) {
+  const present = hasDecisionMetadata(replacement);
+  if (!required && !present) return;
+  if (replacement.approved !== true) {
+    throw new Error(`辞書の項目が不正です: 判断元メタデータは approved: true の項目だけに記録できます（term=${JSON.stringify(replacement.term)}）`);
+  }
+  if (!DECISION_SOURCES.has(replacement.decision_source)) {
+    throw new Error(`辞書の項目が不正です: decision_source は human-approved または delegated-agent が必要です（decision_source=${JSON.stringify(replacement.decision_source)}）`);
+  }
+  if (!isValidIsoDate(replacement.decided_at)) {
+    throw new Error(`辞書の項目が不正です: decided_at は実在する YYYY-MM-DD 形式の日付が必要です（decided_at=${JSON.stringify(replacement.decided_at)}）`);
+  }
+  if (replacement.decision_source === "human-approved" && replacement.delegation_scope !== null) {
+    throw new Error(`辞書の項目が不正です: human-approved の delegation_scope は null が必要です（delegation_scope=${JSON.stringify(replacement.delegation_scope)}）`);
+  }
+  if (replacement.decision_source === "delegated-agent" && (typeof replacement.delegation_scope !== "string" || replacement.delegation_scope.trim().length === 0)) {
+    throw new Error(`辞書の項目が不正です: delegated-agent には空でない delegation_scope が必要です（delegation_scope=${JSON.stringify(replacement.delegation_scope)}）`);
+  }
+}
+
+function decisionMetadataForResult(replacement) {
+  if (!hasDecisionMetadata(replacement)) {
+    return { decisionSource: "legacy-unknown", decidedAt: null, delegationScope: null };
+  }
+  return {
+    decisionSource: replacement.decision_source,
+    decidedAt: replacement.decided_at,
+    delegationScope: replacement.delegation_scope,
+  };
+}
 
 /**
  * 承認済み項目の重複・交差を検証する（違反は throw）。
  * - 同じ from の二重定義: どちらを適用すべきか決められない。
  * - 言い換え先（to）に承認語（from）が含まれる: 適用のたびに文面が変わり冪等でなくなる。
  */
-export function validateApprovedReplacements(replacements) {
+export function validateApprovedReplacements(replacements, { requireDecisionMetadata = false } = {}) {
   if (!Array.isArray(replacements)) throw new Error("辞書の形が不正です: replacements は配列である必要があります");
   for (const r of replacements) {
     if (!r || typeof r.path !== "string" || r.path.length === 0 || path.isAbsolute(r.path) || /^[A-Za-z]:[\\/]/.test(r.path) || r.path.split(/[\\/]/).includes("..")) {
@@ -37,6 +84,7 @@ export function validateApprovedReplacements(replacements) {
     if (typeof r.term !== "string" || r.term.length === 0 || typeof r.from !== "string" || r.from.length === 0 || typeof r.to !== "string" || r.to.length === 0) {
       throw new Error(`辞書の項目が不正です: term・from・to は空でない文字列が必要です（term=${JSON.stringify(r?.term)}, from=${JSON.stringify(r?.from)}）`);
     }
+    validateDecisionMetadata(r, requireDecisionMetadata && r.approved === true);
     const actual = proseOccurrenceCount(r.from, r.path, r.term);
     if (actual === 0) {
       throw new Error(`辞書の項目が不正です: ${r.path} の from に散文上の「${r.term}」がありません`);
@@ -75,6 +123,19 @@ export function validateApprovedReplacements(replacements) {
   }
 }
 
+/** 辞書全体と、宣言された判断元メタデータ契約を検証する。 */
+export function validateDictionary(dict) {
+  if (!dict || !Array.isArray(dict.replacements)) {
+    throw new Error("辞書の形が不正です: { \"replacements\": [{ term, path, from, to, approved }] } の形で書いてください");
+  }
+  if (dict.decision_metadata_version !== undefined && dict.decision_metadata_version !== DECISION_METADATA_VERSION) {
+    throw new Error(`辞書の形が不正です: decision_metadata_version は ${DECISION_METADATA_VERSION} が必要です（decision_metadata_version=${JSON.stringify(dict.decision_metadata_version)}）`);
+  }
+  validateApprovedReplacements(dict.replacements, {
+    requireDecisionMetadata: dict.decision_metadata_version === DECISION_METADATA_VERSION,
+  });
+}
+
 /** 対象文書上で承認済み書き換え単位が重ならないことを検証する。 */
 export function validateNonOverlappingRewriteUnits(text, filePath, replacements) {
   const units = [];
@@ -99,10 +160,7 @@ export function validateNonOverlappingRewriteUnits(text, filePath, replacements)
 /** 辞書ファイル（JSON）を読み、形を検証する。 */
 export function loadDictionary(dictPath) {
   const raw = JSON.parse(fs.readFileSync(dictPath, "utf8"));
-  if (!raw || !Array.isArray(raw.replacements)) {
-    throw new Error("辞書の形が不正です: { \"replacements\": [{ term, path, from, to, approved }] } の形で書いてください");
-  }
-  validateApprovedReplacements(raw.replacements);
+  validateDictionary(raw);
   return raw;
 }
 
@@ -130,15 +188,15 @@ function replaceSimultaneously(text, filePath, replacements) {
 
 /**
  * 辞書を対象リポへ適用する。
- * @returns {{ applied: boolean, reason?: string, changes: {file, term, count}[], rejectedUnapproved: string[], exemptedFiles: {file, term}[], skippedUntracked: string[], skippedDirty: string[], skippedInvalidUtf8: string[] }}
+ * @returns {{ applied: boolean, reason?: string, changes: {file, term, from, to, count, termOccurrences, decisionSource, decidedAt, delegationScope}[], rejectedUnapproved: string[], exemptedFiles: {file, term}[], skippedUntracked: string[], skippedDirty: string[], warningsDirty: string[], skippedInvalidUtf8: string[] }}
  */
 export function applyDictionary(dict, dir) {
-  validateApprovedReplacements(dict.replacements);
+  validateDictionary(dict);
   const rejectedUnapproved = dict.replacements.filter((r) => r.approved !== true).map((r) => r.term);
   const approved = dict.replacements.filter((r) => r.approved === true);
   if (!isGitWorkTree(dir)) {
     // 非 git 管理下: 1バイトも書かない（提案止まり）。
-    return { applied: false, reason: "not-a-git-worktree", changes: [], rejectedUnapproved, exemptedFiles: [], skippedUntracked: [], skippedDirty: [], skippedInvalidUtf8: [] };
+    return { applied: false, reason: "not-a-git-worktree", changes: [], rejectedUnapproved, exemptedFiles: [], skippedUntracked: [], skippedDirty: [], warningsDirty: [], skippedInvalidUtf8: [] };
   }
   const tracked = listTrackedFiles(dir);
   const dirty = listDirtyFiles(dir);
@@ -148,7 +206,9 @@ export function applyDictionary(dict, dir) {
   const changes = [];
   const exemptedFiles = [];
   const skippedUntracked = [];
+  // 後方互換のためフィールドは残す。dirty は warningsDirty で報告して適用する。
   const skippedDirty = [];
+  const warningsDirty = [];
   const skippedInvalidUtf8 = [];
   const writes = [];
   const { docs } = collectDocs(dir);
@@ -187,9 +247,8 @@ export function applyDictionary(dict, dir) {
       continue;
     }
     if (dirty.has(relPath)) {
-      // 未ステージ変更の適用前内容は git に残らないため触らない。
-      skippedDirty.push(doc.path);
-      continue;
+      // 現在のworktree内容へ一意な文章範囲だけを適用する。他の未ステージ差分は保持する。
+      warningsDirty.push(doc.path);
     }
     const result = replaceSimultaneously(text, doc.path, active);
     // 置換先と周辺文字の結合で別の from が新生する境界連鎖もここで拒否する。
@@ -200,11 +259,21 @@ export function applyDictionary(dict, dir) {
     }
     for (const r of active) {
       const count = result.counts.get(r.from) ?? 0;
-      if (count > 0) changes.push({ file: doc.path, term: r.term, count, termOccurrences: r.term_occurrences ?? count });
+      if (count > 0) {
+        changes.push({
+          file: doc.path,
+          term: r.term,
+          from: r.from,
+          to: r.to,
+          count,
+          termOccurrences: r.term_occurrences ?? count,
+          ...decisionMetadataForResult(r),
+        });
+      }
     }
     if (result.text !== text) writes.push({ abs, text: result.text });
   }
   // 全ファイルの検証完了後にだけ書く。辞書不正時の途中適用を防ぐ。
   for (const write of writes) fs.writeFileSync(write.abs, write.text);
-  return { applied: true, changes, rejectedUnapproved, exemptedFiles, skippedUntracked, skippedDirty, skippedInvalidUtf8 };
+  return { applied: true, changes, rejectedUnapproved, exemptedFiles, skippedUntracked, skippedDirty, warningsDirty, skippedInvalidUtf8 };
 }
