@@ -35,7 +35,7 @@ This table maps design choices to prior research and engineering principles; it 
 
 Terminology shifts naturally among human developers. AI coding agents, however, can generate large volumes of design documents, commit messages, and explanations in a short time, greatly increasing both the **rate and replication range** of that drift.
 
-Here, **term drift** is an operational concept used by this tool to group problems observed through dogfooding and bounded audits. Work such as Furnas et al.'s vocabulary problem explains components of the problem; it is not cited as a direct measurement of the whole claim that AI amplifies terminology drift.
+Here, **term drift** is an operational concept used by this tool to group problems observed through dogfooding and explicitly scoped audits. Work such as Furnas et al.'s vocabulary problem explains components of the problem; it is not cited as a direct measurement of the whole claim that AI amplifies terminology drift.
 
 A model chooses plausible words from general corpora, conventions in other projects, and the recent conversation. Whether a word has been agreed upon in the target project cannot be determined from the model's general vocabulary alone. Wording may sound natural locally while creating project-wide divergence:
 
