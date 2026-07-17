@@ -94,7 +94,7 @@ export function collectDocs(dir) {
       const stat = fs.lstatSync(absChild);
       if (stat.isSymbolicLink()) continue;
       if (stat.isDirectory()) {
-        if (EXCLUDED_DIRS.has(name) || (name.startsWith(".") && name !== ".intent")) continue;
+        if (EXCLUDED_DIRS.has(name) || (name.startsWith(".") && ![".intent", ".agents"].includes(name))) continue;
         if (isSecretName(name)) {
           // 秘密名のディレクトリ（secrets/・credentials/ 等）は配下ごと収集しない（INV3）。
           excludedSecrets.push(relChild);

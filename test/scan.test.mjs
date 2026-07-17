@@ -89,6 +89,20 @@ test(".intent の計画文書は優先走査し、台帳だけは別経路のた
   assert.ok(!docs.some((d) => d.path.endsWith(path.join(".intent", "glossary.md"))));
 });
 
+test(".agents 配下のスキル文書は走査し、その他の隠しディレクトリは除外する", () => {
+  const dir = tmpCopy();
+  fs.mkdirSync(path.join(dir, ".agents", "skills", "intent-status"), { recursive: true });
+  fs.writeFileSync(path.join(dir, ".agents", "skills", "intent-status", "SKILL.md"), "status skill");
+  fs.mkdirSync(path.join(dir, ".hidden"), { recursive: true });
+  fs.writeFileSync(path.join(dir, ".hidden", "notes.md"), "hidden notes");
+
+  const { docs } = collectDocs(dir);
+  const collected = docs.map((doc) => doc.path);
+
+  assert.ok(collected.includes(path.join(".agents", "skills", "intent-status", "SKILL.md")));
+  assert.ok(!collected.includes(path.join(".hidden", "notes.md")));
+});
+
 test("部分ディレクトリのコミット収集に親リポの無関係な履歴を混ぜない", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "term-drift-history-"));
   const child = path.join(root, "child");
