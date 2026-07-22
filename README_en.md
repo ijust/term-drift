@@ -73,7 +73,7 @@ The CLI is the skill's execution layer. See Commands below when using it directl
 3. **Classify** — Sort terms into general vocabulary, approved team vocabulary, and suspected unapproved project terminology. Ask the user promptly when uncertain.
 4. **Propose with quotes** — Quote actual usage and propose both replacement wording and the rewritten passage, using ledger examples when available.
 5. **Decision authority** — Use guided human review by default; under an explicit bounded delegation, let the agent decide low-risk groups and escalate high-impact or unresolved cases.
-6. **Deterministic application** — Apply only approved replacements, only under git, and reversibly.
+6. **Deterministic application** — Apply only approved replacements inside a Git worktree; allow untracked files only after confirming that Git cannot restore them.
 7. **Recheck** — Run detection again and converge on no findings, except explicitly justified exceptions.
 
 ## Safety guarantees
@@ -92,14 +92,14 @@ term-drift update --claude|--codex|--gemini [dir]
 term-drift init [dir]
 term-drift scan [dir]
 term-drift ledger [dir]
-term-drift apply <dictionary.json> [dir]
+term-drift apply [--allow-untracked] <dictionary.json> [dir]
 term-drift recheck <dictionary.json> [dir]
 term-drift rules [dir]
 ```
 
 No arguments and the three agent options perform a project-local installation in the current directory. The remaining subcommands form the deterministic execution layer used by the skill and are also available for development, debugging, and other integrations.
 
-`apply` changes each decided entry only at one unique occurrence in its repository-relative `path`. The new format also validates decision provenance and returns the rewrite unit's `from` and `to` together with `decisionSource`, `decidedAt`, and `delegationScope` for every applied change. It rejects dictionaries without a path and entries matching multiple locations before writing. Targets must be tracked UTF-8 documents. If a target has unstaged changes and `from` still matches uniquely in the current content, `apply` preserves unrelated changes, performs the rewrite, and reports the file in `warningsDirty` and stderr. Untracked files, invalid UTF-8, ambiguous or overlapping rewrites, and protected Markdown fragments remain blocked.
+`apply` changes each decided entry only at one unique occurrence in its repository-relative `path`. The new format also validates decision provenance and returns the rewrite unit's `from` and `to` together with `decisionSource`, `decidedAt`, and `delegationScope` for every applied change. It rejects dictionaries without a path and entries matching multiple locations before writing. Targets must be UTF-8 documents inside a Git worktree. If a tracked target has unstaged changes and `from` still matches uniquely in the current content, `apply` preserves unrelated changes, performs the rewrite, and reports the file in `warningsDirty` and stderr. Untracked targets appear in `skippedUntracked` by default. After reviewing the target paths and explicitly accepting that Git cannot restore their current contents, use `apply --allow-untracked`; applied paths then appear in `warningsUntracked` and stderr. Invalid UTF-8, ambiguous or overlapping rewrites, and protected Markdown fragments remain blocked.
 
 Minimal new dictionary format with durable decision provenance:
 

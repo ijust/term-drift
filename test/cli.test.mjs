@@ -49,6 +49,22 @@ test("apply はdirtyな追跡済み文書へ警告付きで適用し、終了コ
   assert.match(fs.readFileSync(file, "utf8"), /未コミットのメモ/);
 });
 
+test("apply --allow-untracked は未追跡文書へ警告付きで適用し、終了コード0を返す", () => {
+  const dir = tmpCopy({ git: true });
+  const file = path.join(dir, "doc-untracked.md");
+  const dictionary = path.join(dir, ".term-drift-untracked.json");
+  fs.writeFileSync(file, "結線の話。\n");
+  fs.writeFileSync(dictionary, JSON.stringify({
+    replacements: [{ term: "結線", path: "doc-untracked.md", from: "結線の話。", to: "つなぎ込みの話。", approved: true }],
+  }));
+  const result = cli(["apply", "--allow-untracked", dictionary, dir], dir);
+  assert.equal(result.status, 0);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.warningsUntracked, ["doc-untracked.md"]);
+  assert.match(result.stderr, /git から復元できない未追跡文書/);
+  assert.equal(fs.readFileSync(file, "utf8"), "つなぎ込みの話。\n");
+});
+
 test("recheck は残存または無効マーカーがあれば終了コード3を返す", () => {
   const dir = tmpCopy({ git: true });
   const result = cli(["recheck", DICT, dir], dir);

@@ -28,7 +28,8 @@ const HELP = `term-drift — AI 支援開発で持ち込まれた用語のずれ
   term-drift init [dir]              対象リポへ目印（.term-drift/）と台帳の雛形を置く（非破壊）
   term-drift scan [dir]              走査対象の収集（部位優先・秘密除外・read-only）
   term-drift ledger [dir]            台帳の解決と内容の表示（.intent/glossary.md 優先）
-  term-drift apply <辞書.json> [dir]   承認済み置換辞書の適用（git 管理下のみ・承認印必須）
+  term-drift apply [--allow-untracked] <辞書.json> [dir]
+                                      承認済み置換辞書の適用（未追跡は明示確認後のみ）
   term-drift recheck <辞書.json> [dir] 承認済み置換の残存照合（例外は理由一行つきのみ有効）
   term-drift rules [dir]             対象リポ固有（なければ配布物）の検出 rules を表示
   term-drift --help                  このヘルプ
@@ -49,6 +50,15 @@ function rejectExtraArgs(args, max, usage) {
   if (args.length <= max) return;
   console.error(`余分な引数があります: ${args.slice(max).join(" ")}\n使い方: ${usage}`);
   process.exit(1);
+}
+
+function extractFlag(args, flag, usage) {
+  const count = args.filter((arg) => arg === flag).length;
+  if (count > 1) {
+    console.error(`${flag} は1回だけ指定してください。\n使い方: ${usage}`);
+    process.exit(1);
+  }
+  return { args: args.filter((arg) => arg !== flag), present: count === 1 };
 }
 
 const [, , command, ...rest] = process.argv;
@@ -123,14 +133,16 @@ switch (command) {
     break;
   }
   case "apply": {
-    if (!rest[0]) {
-      console.error("辞書ファイルを指定してください: term-drift apply <辞書.json> [dir]");
+    const usage = "term-drift apply [--allow-untracked] <辞書.json> [dir]";
+    const parsed = extractFlag(rest, "--allow-untracked", usage);
+    if (!parsed.args[0]) {
+      console.error(`辞書ファイルを指定してください: ${usage}`);
       process.exit(1);
     }
-    rejectExtraArgs(rest, 2, "term-drift apply <辞書.json> [dir]");
-    const dict = loadDictionary(path.resolve(rest[0]));
-    const dir = resolveDir(rest[1]);
-    const result = applyDictionary(dict, dir);
+    rejectExtraArgs(parsed.args, 2, usage);
+    const dict = loadDictionary(path.resolve(parsed.args[0]));
+    const dir = resolveDir(parsed.args[1]);
+    const result = applyDictionary(dict, dir, { allowUntracked: parsed.present });
     console.log(JSON.stringify(result, null, 2));
     if (!result.applied) {
       console.error("適用を拒否しました: 対象が git 管理下にありません（可逆性を担保できないため書き込みません）");
@@ -138,6 +150,9 @@ switch (command) {
     }
     if (result.warningsDirty?.length) {
       console.error(`警告: 未ステージ変更のある追跡済み文書へ、現在内容の一意な一致だけを適用しました: ${result.warningsDirty.join(", ")}`);
+    }
+    if (result.warningsUntracked?.length) {
+      console.error(`警告: git から復元できない未追跡文書へ、明示確認済みとして適用しました: ${result.warningsUntracked.join(", ")}`);
     }
     if (result.skippedUntracked.length || result.skippedDirty.length || result.skippedInvalidUtf8.length) {
       console.error("適用できなかった対象があります。JSON の skipped* を確認してください。");

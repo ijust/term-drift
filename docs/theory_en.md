@@ -24,7 +24,7 @@ term-drift approaches this problem by combining Domain-Driven Design's **Ubiquit
 | Individual occurrence inspection with semantic-group decisions | Human-in-the-Loop and an explicit authorization scope (grouping is term-drift's safety design) | Amershi et al. / Bainbridge |
 | Zero writes without decision authority | Authorization and Design by Contract | Meyer |
 | Reasons recorded for retained exceptions | Lint suppression with rationale and design rationale | Nygard / design rationale |
-| Unique-range application to tracked documents with dirty-file warnings | Small changes that preserve existing worktree edits | Feathers / Fowler |
+| Unique-range application with warnings for dirty or explicitly confirmed untracked documents | Small changes that preserve existing edits and expose recovery risk | Feathers / Fowler |
 | Rechecking and idempotence after application | Feedback loops and contract checking | Deming / Meyer |
 | Secret exclusion and no outbound feature in the CLI | Collection-scope minimization (a term-drift design choice) and least privilege | Saltzer & Schroeder (least privilege) |
 | Shared ledger with intent-planner | Single source of truth and loose coupling | Evans / docs-as-code |
@@ -144,7 +144,7 @@ A terminology rewrite looks like a small string edit, but it can affect cross-do
 
 ### Preconditions for writing
 
-- The target is under git and the file is tracked.
+- The target is inside a Git worktree. Files are tracked by default; an untracked file may be changed only after listing its path and separately confirming that Git cannot restore its current contents.
 - If a tracked file differs from the git index, application may continue when the approved `from` passage still matches uniquely in the current content. Unrelated worktree edits are preserved and the file is reported as a dirty-file warning; ambiguous or overlapping rewrites remain blocked.
 - A document that is not valid UTF-8 is left untouched to prevent byte corruption through re-encoding.
 - Conventional Markdown code fences, single-line inline code, HTML comments, and link destinations are protected as machine-facing references. The implementation is not a complete parser for malformed Markdown or custom syntax.
@@ -152,7 +152,7 @@ A terminology rewrite looks like a small string edit, but it can affect cross-do
 - New-format entries are rejected when their structured human-approval or delegated-decision metadata is incomplete.
 - All targets are validated before writing begins, preventing a malformed dictionary from being partially applied.
 
-Prevalidation prevents dictionary errors from causing partial application, but writes across multiple files are not transactional. There is no automatic rollback for an I/O failure or process termination during the write loop; recovery in that case relies on git.
+Prevalidation prevents dictionary errors from causing partial application, but writes across multiple files are not transactional. There is no automatic rollback for an I/O failure or process termination during the write loop; recovery for tracked files relies on Git. Because untracked files have no such recovery path, they require confirmation separate from wording approval and are writable only when the run includes `--allow-untracked`.
 
 ### Postconditions after writing
 

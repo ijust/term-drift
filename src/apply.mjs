@@ -2,7 +2,8 @@
 // 安全の床:
 //   - approved: true の項目だけを適用する。無い項目は1バイトも書かず「拒否」として報告する。
 //   - 対象が git 管理下に無ければ適用自体を拒否する（可逆性の担保・提案止まり）。
-//   - git 追跡外のファイルには書かない（git から復元できないため）。スキップとして報告する。
+//   - git 追跡外のファイルは既定では書かない。対象を列挙した確認後の明示オプションがある場合だけ、
+//     git から復元できないことを警告して適用する。
 //   - 未ステージ変更のある追跡済みファイルは、現在内容への一意照合を保ったまま警告付きで適用する。
 //     対象外の差分は保持し、曖昧一致・交差・保護領域変更は従来どおり拒否する。
 //   - 承認単位は対象ファイル内の一意な文章1箇所。path の無い辞書や、同じ文章が対象内で
@@ -188,15 +189,16 @@ function replaceSimultaneously(text, filePath, replacements) {
 
 /**
  * 辞書を対象リポへ適用する。
- * @returns {{ applied: boolean, reason?: string, changes: {file, term, from, to, count, termOccurrences, decisionSource, decidedAt, delegationScope}[], rejectedUnapproved: string[], exemptedFiles: {file, term}[], skippedUntracked: string[], skippedDirty: string[], warningsDirty: string[], skippedInvalidUtf8: string[] }}
+ * @param {{ allowUntracked?: boolean }} options
+ * @returns {{ applied: boolean, reason?: string, changes: {file, term, from, to, count, termOccurrences, decisionSource, decidedAt, delegationScope}[], rejectedUnapproved: string[], exemptedFiles: {file, term}[], skippedUntracked: string[], skippedDirty: string[], warningsDirty: string[], warningsUntracked: string[], skippedInvalidUtf8: string[] }}
  */
-export function applyDictionary(dict, dir) {
+export function applyDictionary(dict, dir, { allowUntracked = false } = {}) {
   validateDictionary(dict);
   const rejectedUnapproved = dict.replacements.filter((r) => r.approved !== true).map((r) => r.term);
   const approved = dict.replacements.filter((r) => r.approved === true);
   if (!isGitWorkTree(dir)) {
     // 非 git 管理下: 1バイトも書かない（提案止まり）。
-    return { applied: false, reason: "not-a-git-worktree", changes: [], rejectedUnapproved, exemptedFiles: [], skippedUntracked: [], skippedDirty: [], warningsDirty: [], skippedInvalidUtf8: [] };
+    return { applied: false, reason: "not-a-git-worktree", changes: [], rejectedUnapproved, exemptedFiles: [], skippedUntracked: [], skippedDirty: [], warningsDirty: [], warningsUntracked: [], skippedInvalidUtf8: [] };
   }
   const tracked = listTrackedFiles(dir);
   const dirty = listDirtyFiles(dir);
@@ -209,6 +211,7 @@ export function applyDictionary(dict, dir) {
   // 後方互換のためフィールドは残す。dirty は warningsDirty で報告して適用する。
   const skippedDirty = [];
   const warningsDirty = [];
+  const warningsUntracked = [];
   const skippedInvalidUtf8 = [];
   const writes = [];
   const { docs } = collectDocs(dir);
@@ -242,9 +245,12 @@ export function applyDictionary(dict, dir) {
     }
     if (active.length === 0) continue;
     if (!tracked.has(relPath)) {
-      // 追跡外は git から復元できない: 書かずにスキップとして報告する（INV1）。
-      skippedUntracked.push(doc.path);
-      continue;
+      if (!allowUntracked) {
+        // 既定では git から復元できない対象へ書かず、明示確認を要求する。
+        skippedUntracked.push(doc.path);
+        continue;
+      }
+      warningsUntracked.push(doc.path);
     }
     if (dirty.has(relPath)) {
       // 現在のworktree内容へ一意な文章範囲だけを適用する。他の未ステージ差分は保持する。
@@ -275,5 +281,5 @@ export function applyDictionary(dict, dir) {
   }
   // 全ファイルの検証完了後にだけ書く。辞書不正時の途中適用を防ぐ。
   for (const write of writes) fs.writeFileSync(write.abs, write.text);
-  return { applied: true, changes, rejectedUnapproved, exemptedFiles, skippedUntracked, skippedDirty, warningsDirty, skippedInvalidUtf8 };
+  return { applied: true, changes, rejectedUnapproved, exemptedFiles, skippedUntracked, skippedDirty, warningsDirty, warningsUntracked, skippedInvalidUtf8 };
 }
